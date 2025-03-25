@@ -6,8 +6,8 @@ import torchvision.transforms as transforms
 
 from sklearn.metrics import accuracy_score, classification_report
 
-from src.tiny_imagenet_dataset import TinyImageNetTrainDataset, TinyImageNetTestDataset
-from src.transformer import VisionTransformer
+from src.data.tiny_imagenet_dataset import SmallImageNetTrainDataset
+from src.models.transformer import VisionTransformer
 from src.utils import plot_metrics
 
 
@@ -25,21 +25,24 @@ def train(model, train_dataloader, valid_dataloader, criterion, optimizer, devic
         correct_train = 0
         total_train = 0
 
-        for inputs, labels in tqdm(train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}"):
+        for inputs, labels, tags in tqdm(train_dataloader, desc=f"Training Epoch {epoch+1}/{epochs}"):
             inputs, labels = inputs.to(device), labels.to(device)
 
             optimizer.zero_grad()
 
             outputs = model(inputs)
-            loss = criterion(outputs, labels)
 
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
             total_train += labels.size(0)
-            correct_train += (predicted == labels).sum().item()
+
+            predicted_encoded = torch.zeros_like(labels)
+            predicted_encoded[predicted] = 1.0
+            correct_train += (predicted_encoded == labels).sum().item()
 
         train_loss = running_loss / len(train_dataloader)
         train_accuracy = correct_train / total_train
@@ -94,23 +97,42 @@ def test(model, test_dataloader, device):
 
 
 if __name__ == '__main__':
-    dataset_root = None
+    train_dataset_dir = r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/small_imagenet_object_loc/train"
+    val_dataset_dir = r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/small_imagenet_object_loc/val"
+    classes_names_path = r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/small_imagenet_object_loc/classes_names.txt"
 
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize
     ])
 
-    train_dataset = TinyImageNetTrainDataset(root_dir=dataset_root, transform=transform)
-    val_dataset = TinyImageNetTestDataset(root_dir=dataset_root, split='val', transform=transform)
+    train_dataset = SmallImageNetTrainDataset(
+        root_dir=train_dataset_dir,
+        classes_names_path=classes_names_path,
+        transform=transform
+    )
+    val_dataset = SmallImageNetTrainDataset(
+        root_dir=val_dataset_dir,
+        classes_names_path=classes_names_path,
+        transform=transform
+    )
 
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
 
     device = torch.device("mps")
-    model = VisionTransformer()
-    criterion = nn.CrossEntropyLoss()
+    model = VisionTransformer(
+        image_size = 224,
+        patch_size = 16,
+        in_channels = 3,
+        embed_dim = 768,
+        qkv_dim = 64,
+        mlp_hidden_size = 3072,
+        n_layers= 12,
+        n_heads = 12,
+        n_classes = 1000
+    )
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
 
     train_loss, val_loss, train_acc, val_acc = train(
@@ -120,7 +142,7 @@ if __name__ == '__main__':
         criterion=criterion,
         optimizer=optimizer,
         device=device,
-        epochs=30
+        epochs=2
     )
 
     plot_metrics(train_loss, val_loss, train_acc, val_acc)
