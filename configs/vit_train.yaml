@@ -1,0 +1,24 @@
+dataset:
+  train_root_dir: ""
+  val_root_dir: ""
+  test_root_dir: ""
+  classes_names_path: ""
+
+model_hparams:
+  image_size: 224,
+  patch_size: 16,
+  in_channels: 3,
+  embed_dim: 768,
+  qkv_dim: 64,
+  mlp_hidden_size: 3072,
+  n_layers: 12,
+  n_heads: 12,
+  n_classes: 1000,
+
+train_hparams:
+    lr: 1e-3
+    train_batch_size: 32
+    val_batch_size: 32
+    num_workers: 4
+    max_epoch: 10
+    accelerator: "cuda"
