@@ -71,7 +71,7 @@ class SmallImageNetTrainDataset(Dataset):
         label = self.class_to_idx[image_tag]
         label_encoded = torch.zeros(len(self.classes_tags), dtype=torch.float32)
         label_encoded[label] = 1.0
-        return image, label_encoded, image_tag
+        return dict(image=image, label_encoded=label_encoded, tag=image_tag)
 
 
 if __name__ == "__main__":
