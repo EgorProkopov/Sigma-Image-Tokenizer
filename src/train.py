@@ -55,7 +55,7 @@ def train(model, train_dataloader, valid_dataloader, criterion, optimizer, devic
         total_val = 0
 
         with torch.no_grad():
-            for inputs, labels in tqdm(valid_dataloader, desc=f"Validation Epoch {epoch+1}/{epochs}"):
+            for inputs, labels, tags in tqdm(valid_dataloader, desc=f"Validation Epoch {epoch+1}/{epochs}"):
                 inputs, labels = inputs.to(device), labels.to(device)
 
                 outputs = model(inputs)
@@ -64,7 +64,10 @@ def train(model, train_dataloader, valid_dataloader, criterion, optimizer, devic
                 running_val_loss += loss.item()
                 _, predicted = torch.max(outputs, 1)
                 total_val += labels.size(0)
-                correct_val += (predicted == labels).sum().item()
+
+                predicted_encoded = torch.zeros_like(labels)
+                predicted_encoded[predicted] = 1.0
+                correct_val += (predicted_encoded == labels).sum().item()
 
         val_loss = running_val_loss / len(valid_dataloader)
         val_accuracy = correct_val / total_val
