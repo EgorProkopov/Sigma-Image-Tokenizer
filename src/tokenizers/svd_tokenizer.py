@@ -65,8 +65,8 @@ class SVDTokenizer(nn.Module):
         print(self.cls_token.shape)
         print(embeddings.shape)
         embeddings = torch.cat([self.cls_token, embeddings], dim=0)
-        positional_embeddings = self.positional_encoding(embeddings)
-        embeddings = embeddings + positional_embeddings
+        # positional_embeddings = self.positional_encoding(embeddings)
+        # embeddings = embeddings + positional_embeddings
         return embeddings
 
 
