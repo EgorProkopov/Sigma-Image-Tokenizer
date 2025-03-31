@@ -8,7 +8,7 @@ class SVDTokenizer(nn.Module):
 
         self.dispersion = dispersion
 
-    def forward(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
         U, S, Vh = torch.linalg.svd(image, full_matrices=True)
         V = Vh.mH
 
@@ -29,11 +29,10 @@ class SVDTokenizer(nn.Module):
 
         approx_U, approx_S, approx_V = U[:, :, :rank], S[:, :rank], V[:, :, :rank]
 
-        return approx_U, approx_S, approx_V
+        return approx_U, approx_S, approx_V, rank
 
     @staticmethod
     def reconstruct_image(approx_U, approx_S, approx_V):
-
         US = approx_U * approx_S.unsqueeze(1)  # Shape: [channels, m, rank]
         Vt = approx_V.transpose(1, 2)
         approx_image = torch.bmm(US, Vt)
