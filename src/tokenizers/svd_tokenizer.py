@@ -1,14 +1,18 @@
 import torch
 import torch.nn as nn
 
+from src.tokenizers.positional_encoding import PositionalEncoding
+
 
 class SVDTokenizer(nn.Module):
-    def __init__(self, image_size, embedding_size, dispersion=0.9):
+    def __init__(self, image_size, embedding_dim, dispersion=0.9):
         super().__init__()
 
         self.dispersion = dispersion
 
-        self.embedder = nn.Linear(image_size * 2, embedding_size)
+        self.embedder = nn.Linear(image_size * 2, embedding_dim)
+        self.cls_token = nn.Parameter(torch.randn(1, embedding_dim))
+        self.positional_encoding = PositionalEncoding(embedding_dim)
 
     def get_approx_svd(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
         U, S, Vh = torch.linalg.svd(image, full_matrices=True)
@@ -57,8 +61,13 @@ class SVDTokenizer(nn.Module):
         channels, rank, image_size = raw_embedding.shape
         raw_embedding = torch.reshape(raw_embedding, (channels * rank, image_size))
 
-        embedding = self.embedder(raw_embedding)
-        return embedding
+        embeddings = self.embedder(raw_embedding)
+        print(self.cls_token.shape)
+        print(embeddings.shape)
+        embeddings = torch.cat([self.cls_token, embeddings], dim=0)
+        positional_embeddings = self.positional_encoding(embeddings)
+        embeddings = embeddings + positional_embeddings
+        return embeddings
 
 
     @staticmethod
