@@ -30,4 +30,12 @@ class SVDTokenizer(nn.Module):
         approx_U, approx_S, approx_V = U[:, :, :rank], S[:, :rank], V[:, :, :rank]
 
         return approx_U, approx_S, approx_V
-    
+
+    @staticmethod
+    def reconstruct_image(approx_U, approx_S, approx_V):
+
+        US = approx_U * approx_S.unsqueeze(1)  # Shape: [channels, m, rank]
+        Vt = approx_V.transpose(1, 2)
+        approx_image = torch.bmm(US, Vt)
+
+        return approx_image
