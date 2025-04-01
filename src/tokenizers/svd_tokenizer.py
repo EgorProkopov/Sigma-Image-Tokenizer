@@ -11,10 +11,14 @@ class SVDTokenizer(nn.Module):
         self.dispersion = dispersion
 
         self.embedder = nn.Linear(image_size * 2, embedding_dim)
-        self.cls_token = nn.Parameter(torch.randn(1, embedding_dim))
+        self.cls_token = nn.Parameter(torch.randn(2, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
     def get_approx_svd(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
+        """
+        Input image shape: [channels, image_width, image_height]
+        """
+
         U, S, Vh = torch.linalg.svd(image, full_matrices=True)
         V = Vh.mH
 
@@ -37,38 +41,82 @@ class SVDTokenizer(nn.Module):
 
         return approx_U, approx_S, approx_V, rank
 
-    def forward(self, image: torch.Tensor) -> torch.Tensor:
-        # with torch.no_grad():
-        # Shapes: [channels,image_size, rank] and [channels, rank]
-        approx_U, approx_S, approx_V, _ = self.get_approx_svd(image)
+    def batched_get_approx_svd(self, batch: torch.Tensor):
+        return list(map(self.get_approx_svd, batch))  # Apply SVD to each image in batch
 
+    def get_raw_embeddings(self, approx_U: torch.Tensor, approx_S: torch.Tensor, approx_V: torch.Tensor) -> torch.Tensor:
+        """
+        Convert the approximate SVD outputs to a raw embeddings (token sequence).
+        Input shapes:
+          approx_U: [channels, image_size, rank]
+          approx_S: [channels, rank]
+          approx_V: [channels, image_size, rank]
+        Returns:
+          raw_embedding: Tensor of shape [tokens, token_dim]
+          where tokens = channels * rank and token_dim = image_size * 2.
+        """
+
+        # New shapes: [channels, rank, image_size]
         approx_U = approx_U.transpose(1, 2)
         approx_V = approx_V.transpose(1, 2)
 
         approx_S_root = torch.sqrt(approx_S)
 
-        # print(approx_U.shape)
-        # print(approx_S_root.shape)
-        # print(approx_V.shape)
+        # Unsqueeze at -1 to match image_size.
+        approx_US = approx_U * approx_S_root.unsqueeze(-1)  # shape: [channels, rank, image_size]
+        approx_SV = approx_V * approx_S_root.unsqueeze(-1)  # shape: [channels, rank, image_size]
 
-        approx_US = approx_U * approx_S_root.unsqueeze(-1)  # Shape: [channels, rank, image_size]
-        approx_SV = approx_V * approx_S_root.unsqueeze(-1)  # Shape: [channels, rank, image_size]
+        # To treat each (channel, rank) as a token, bring rank to front:
+        # New shapes: [rank, channels, image_size]
+        approx_US = approx_US.transpose(0, 1)
+        approx_SV = approx_SV.transpose(0, 1)
 
-        approx_US = approx_US.transpose(0, 1)  # Shape: [rank, channels, image_size]
-        approx_SV = approx_SV.transpose(0, 1)  # Shape: [rank, channels, image_size]
+        #  New shape: [rank, channels, image_size * 2]
+        raw_embedding = torch.cat([approx_US, approx_SV], dim=-1)
 
-        raw_embedding = torch.cat([approx_US, approx_SV], dim=-1)  # Shape: [rank, channels, image_size * 2]
-        channels, rank, image_size = raw_embedding.shape
-        raw_embedding = torch.reshape(raw_embedding, (channels * rank, image_size))
+        # New shape: [rank * channels, image_size * 2]
+        channels = raw_embedding.shape[1]
+        rank = raw_embedding.shape[0]
+        token_dim = raw_embedding.shape[-1]
+        raw_embedding = raw_embedding.reshape(rank * channels, token_dim)
 
-        embeddings = self.embedder(raw_embedding)
-        print(self.cls_token.shape)
-        print(embeddings.shape)
-        embeddings = torch.cat([self.cls_token, embeddings], dim=0)
-        # positional_embeddings = self.positional_encoding(embeddings)
-        # embeddings = embeddings + positional_embeddings
+        return raw_embedding
+
+    def process_image(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        Input image shape: [channels, image_size, image_size]
+
+        Output embeddings shape: [rank * channels (len of tokens sequence), image_size * 2]
+        """
+        approx_U, approx_S, approx_V, _ = self.get_approx_svd(image)
+        return self.get_raw_embeddings(approx_U, approx_S, approx_V)
+
+    def pad_tokens(self, raw_embebeddings, max_tokens):
+        n_tokens = raw_embebeddings.shape[0]
+        token_dim = raw_embebeddings.shape[-1]
+        if n_tokens < max_tokens:
+            pad_tensor = torch.zeros(max_tokens - n_tokens, token_dim, device=raw_embebeddings.device)
+            return torch.cat([raw_embebeddings, pad_tensor], dim=0)
+        return raw_embebeddings
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        """
+
+        """
+        raw_embeddings_list = list(map(self.process_image, images))
+        token_counts = list(map(lambda x: x.shape[0], raw_embeddings_list))
+        max_tokens = max(token_counts)
+        padded_embeddings_list = list(map(self.pad_tokens, raw_embeddings_list, [max_tokens] * len(raw_embeddings_list)))
+        batched_raw_embeddings = torch.stack(padded_embeddings_list, dim=0)
+
+        embeddings = self.embedder(batched_raw_embeddings)
+
+        batch_size = images.shape[0]
+        cls_token = self.cls_token.expand(batch_size, -1, -1)  # [batch_size, 1, embedding_size]
+        embeddings = torch.cat([cls_token, embeddings], dim=1)  # [batch_size, max_tokens+1, embedding_size]
+
+        # embeddings = embeddings + self.positional_encoding(embeddings)
         return embeddings
-
 
     @staticmethod
     def reconstruct_image(approx_U, approx_S, approx_V):
