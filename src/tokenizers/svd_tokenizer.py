@@ -5,13 +5,14 @@ from src.tokenizers.positional_encoding import PositionalEncoding
 
 
 class SVDTokenizer(nn.Module):
-    def __init__(self, image_size, embedding_dim, dispersion=0.9):
+    def __init__(self, image_size, embedding_dim, dispersion=0.9, full_matrices=True):
         super().__init__()
 
         self.dispersion = dispersion
+        self.full_matrices = full_matrices
 
-        self.embedder = nn.Linear(image_size * 2, embedding_dim)
-        self.cls_token = nn.Parameter(torch.randn(2, 1, embedding_dim))
+        self.embedder = nn.Linear(in_features=image_size * 2, out_features=embedding_dim)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
     def get_approx_svd(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]:
@@ -19,7 +20,7 @@ class SVDTokenizer(nn.Module):
         Input image shape: [channels, image_width, image_height]
         """
 
-        U, S, Vh = torch.linalg.svd(image, full_matrices=True)
+        U, S, Vh = torch.linalg.svd(image, full_matrices=self.full_matrices)
         V = Vh.mH
 
         S_squared = torch.square(S)
@@ -101,7 +102,8 @@ class SVDTokenizer(nn.Module):
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
-
+        Input image shape: [batch_size, channels, image_size, image_size]
+        Output sequence shape: [batch_size, rank * channels (sequence length), token_dim]
         """
         raw_embeddings_list = list(map(self.process_image, images))
         token_counts = list(map(lambda x: x.shape[0], raw_embeddings_list))
@@ -112,10 +114,11 @@ class SVDTokenizer(nn.Module):
         embeddings = self.embedder(batched_raw_embeddings)
 
         batch_size = images.shape[0]
-        cls_token = self.cls_token.expand(batch_size, -1, -1)  # [batch_size, 1, embedding_size]
+        cls_token = self.cls_token.expand(batch_size, -1, -1)
         embeddings = torch.cat([cls_token, embeddings], dim=1)  # [batch_size, max_tokens+1, embedding_size]
 
-        # embeddings = embeddings + self.positional_encoding(embeddings)
+        positional_encoding = self.positional_encoding(embeddings)
+        embeddings = embeddings + positional_encoding
         return embeddings
 
     @staticmethod

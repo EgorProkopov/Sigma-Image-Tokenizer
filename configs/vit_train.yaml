@@ -1,19 +1,19 @@
 dataset:
-  train_root_dir: ""
-  val_root_dir: ""
+  train_root_dir: "F:\research\data\small_imagenet_object_loc\train"
+  val_root_dir: "F:\research\data\small_imagenet_object_loc\val"
   test_root_dir: ""
-  classes_names_path: ""
+  classes_names_path: "F:\research\data\small_imagenet_object_loc\classes_names.txt"
 
 model_hparams:
-  image_size: 224,
-  patch_size: 16,
-  in_channels: 3,
-  embed_dim: 768,
-  qkv_dim: 64,
-  mlp_hidden_size: 3072,
-  n_layers: 12,
-  n_heads: 12,
-  n_classes: 1000,
+  image_size: 224
+  patch_size: 16
+  in_channels: 3
+  embedding_dim: 768
+  qkv_dim: 64
+  mlp_hidden_size: 3072
+  n_layers: 12
+  n_heads: 12
+  n_classes: 1000
 
 train_hparams:
     lr: 1e-3
