@@ -1,8 +1,7 @@
 dataset:
-  train_root_dir: "F:\research\data\small_imagenet_object_loc\train"
-  val_root_dir: "F:\research\data\small_imagenet_object_loc\val"
-  test_root_dir: ""
-  classes_names_path: "F:\research\data\small_imagenet_object_loc\classes_names.txt"
+  train_root_dir: 'F:\\research\data\\small_imagenet_object_loc\\train'
+  val_root_dir: 'F:\\research\data\\small_imagenet_object_loc\\val'
+  classes_names_path: 'F:\\research\\data\\small_imagenet_object_loc\\classes_names.txt'
 
 model_hparams:
   image_size: 224
@@ -11,14 +10,14 @@ model_hparams:
   embedding_dim: 768
   qkv_dim: 64
   mlp_hidden_size: 3072
-  n_layers: 12
+  n_layers: 24
   n_heads: 12
   n_classes: 1000
 
 train_hparams:
     lr: 1e-3
-    train_batch_size: 32
-    val_batch_size: 32
+    train_batch_size: 12
+    val_batch_size: 12
     num_workers: 4
-    max_epoch: 10
+    max_epoch: 20
     accelerator: "cuda"

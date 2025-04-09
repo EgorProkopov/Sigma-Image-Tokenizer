@@ -67,7 +67,6 @@ class SVDTokenizer(nn.Module):
         approx_US = approx_U * approx_S_root.unsqueeze(-1)  # shape: [channels, rank, image_size]
         approx_SV = approx_V * approx_S_root.unsqueeze(-1)  # shape: [channels, rank, image_size]
 
-        # To treat each (channel, rank) as a token, bring rank to front:
         # New shapes: [rank, channels, image_size]
         approx_US = approx_US.transpose(0, 1)
         approx_SV = approx_SV.transpose(0, 1)

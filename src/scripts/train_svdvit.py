@@ -7,17 +7,27 @@ from omegaconf import OmegaConf
 
 from src.data.tiny_imagenet_dataset import SmallImageNetTrainDataset
 from src.models.lightning_modules import SVDViTLightingModule
+from src.utils import set_seed
 
 
 def main():
+    set_seed(239)
     config = OmegaConf.load(r"F:\\research\\Sigma-Image-Tokenizer\\configs\\svdvit_train.yaml")
 
     model_hparams = config["model_hparams"]
 
     transform = transforms.Compose([
-        transforms.Resize((model_hparams["image_size"], model_hparams["image_size"])),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Resize((
+            int(model_hparams["image_size"] * 1.25),
+            int(model_hparams["image_size"] * 1.25)
+        )),
+        transforms.RandomCrop(model_hparams["image_size"]),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ),
     ])
 
     train_dataset = SmallImageNetTrainDataset(
@@ -35,6 +45,9 @@ def main():
     train_size = len(train_dataset)
     val_size = len(val_dataset)
 
+    print(f"Размер тренировочного датасета: {train_size}")
+    print(f"Размер валидационного датасета: {val_size}")
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["train_hparams"]["train_batch_size"],
@@ -49,13 +62,16 @@ def main():
     )
 
     criterion = torch.nn.CrossEntropyLoss()
-    model = SVDViTLightingModule(model_hparams, criterion, lr=1e-3)
+    model = SVDViTLightingModule(model_hparams, criterion, lr=1e-3, log_step=100)
+
+    if config["train_hparams"]["accelerator"] == "cuda":
+        torch.set_float32_matmul_precision('medium')
 
     trainer = pl.Trainer(
         max_epochs=config["train_hparams"]["max_epoch"],
         devices=1 if torch.cuda.is_available() else None,
         accelerator=config["train_hparams"]["accelerator"],
-        log_every_n_steps=100
+        log_every_n_steps=1000
     )
 
     trainer.fit(model, train_loader, val_loader)

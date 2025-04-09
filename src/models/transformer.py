@@ -36,8 +36,9 @@ class VisionTransformer(nn.Module):
             n_heads=n_heads
         )
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes),
-            nn.Sigmoid()
+            nn.Linear(embedding_dim, 1024),
+            nn.GELU(),
+            nn.Linear(1024, n_classes)
         )
 
     def forward(self, tensor):
@@ -75,8 +76,9 @@ class SVDViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes),
-            nn.Sigmoid()
+            nn.Linear(embedding_dim, 1024),
+            nn.GELU(),
+            nn.Linear(1024, n_classes)
         )
 
     def forward(self, tensor):

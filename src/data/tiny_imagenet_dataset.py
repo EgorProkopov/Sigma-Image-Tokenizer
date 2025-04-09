@@ -18,7 +18,6 @@ class SmallImageNetTrainDataset(Dataset):
         self.classes_names_path = classes_names_path
 
         self.transform = transform
-        self.to_tensor_transform = transforms.ToTensor()
 
         self.classes_tags = sorted(os.listdir(root_dir))
         if self.classes_tags[0] == '.DS_Store':
@@ -64,14 +63,13 @@ class SmallImageNetTrainDataset(Dataset):
         image_tag = self.image_tags[idx]
 
         image = Image.open(img_path).convert("RGB")
-        image = self.to_tensor_transform(image)
         if self.transform:
             image = self.transform(image)
 
         label = self.class_to_idx[image_tag]
-        label_encoded = torch.zeros(len(self.classes_tags), dtype=torch.float32)
-        label_encoded[label] = 1.0
-        return dict(image=image, label_encoded=label_encoded, tag=image_tag)
+        # label_encoded = torch.zeros(len(self.classes_tags), dtype=torch.float32)
+        # label_encoded[label] = 1.0
+        return dict(image=image, label_encoded=label, tag=image_tag)
 
 
 if __name__ == "__main__":
