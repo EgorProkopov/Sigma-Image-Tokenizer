@@ -37,8 +37,10 @@ class CustomLightningModule(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        images = batch["image"]
-        labels = batch["label_encoded"]
+        # images = batch["image"]
+        # labels = batch["label_encoded"]
+
+        images, labels = batch
 
         outputs = self.forward(images)
         loss = self.criterion(outputs, labels)

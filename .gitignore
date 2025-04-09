@@ -163,3 +163,4 @@ cython_debug/
 /src/scripts/lightning_logs
 /src/scripts/lightning_logs
 /src/scripts/lightning_logs
+/src/scripts/data

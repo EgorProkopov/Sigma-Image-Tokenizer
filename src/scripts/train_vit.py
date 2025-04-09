@@ -13,7 +13,7 @@ from src.utils import set_seed
 
 def main():
     set_seed(239)
-    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\vit_train.yaml")
+    config = OmegaConf.load(r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/Sigma-Image-Tokenizer/configs/vit_train.yaml")
 
     model_hparams = config["model_hparams"]
 
@@ -31,21 +31,20 @@ def main():
         ),
     ])
 
-    train_dataset = SmallImageNetTrainDataset(
-        root_dir=config["dataset"]["train_root_dir"],
-        classes_names_path=config["dataset"]["classes_names_path"],
-        transform=transform
-    )
+    # train_dataset = SmallImageNetTrainDataset(
+    #     root_dir=config["dataset"]["train_root_dir"],
+    #     classes_names_path=config["dataset"]["classes_names_path"],
+    #     transform=transform
+    # )
+    #
+    # val_dataset = SmallImageNetTrainDataset(
+    #     root_dir=config["dataset"]["val_root_dir"],
+    #     classes_names_path=config["dataset"]["classes_names_path"],
+    #     transform=transform
+    # )
 
-    val_dataset = SmallImageNetTrainDataset(
-        root_dir=config["dataset"]["val_root_dir"],
-        classes_names_path=config["dataset"]["classes_names_path"],
-        transform=transform
-    )
-
-    # train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    # val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-
+    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 
     train_size = len(train_dataset)
     val_size = len(val_dataset)
@@ -67,7 +66,7 @@ def main():
     )
 
     criterion = torch.nn.CrossEntropyLoss()
-    model = ViTLightingModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=1000)
+    model = ViTLightingModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=100)
 
     # if config["train_hparams"]["accelerator"] == "cuda":
     #     torch.set_float32_matmul_precision('medium')
@@ -75,9 +74,8 @@ def main():
 
     trainer = pl.Trainer(
         max_epochs=config["train_hparams"]["max_epoch"],
-        devices=1 if torch.cuda.is_available() else None,
         accelerator=config["train_hparams"]["accelerator"],
-        log_every_n_steps=1000
+        log_every_n_steps=100
     )
 
     trainer.fit(model, train_loader, val_loader)
