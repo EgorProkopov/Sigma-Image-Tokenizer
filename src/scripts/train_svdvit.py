@@ -7,7 +7,7 @@ from src.scripts.train import train_model
 
 def main():
     set_seed(239)
-    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\svdvit_train.yaml")
+    config = OmegaConf.load(r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/Sigma-Image-Tokenizer/configs/svd_square_vit_train.yaml")
     model_hparams = config["model_hparams"]
 
     criterion = torch.nn.CrossEntropyLoss()

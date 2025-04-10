@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from src.models.modules import TransformerEncoder
 from src.tokenizers.vit_tokenization import ViTTokenization
-from src.tokenizers.svd_tokenizer import SVDTokenizer
+from src.tokenizers.svd_tokenizer import SVDSQuareTokenizer
 
 class VisionTransformer(nn.Module):
     def __init__(
@@ -63,7 +63,7 @@ class SVDViT(nn.Module):
     ):
         super().__init__()
 
-        self.tokenizer = SVDTokenizer(
+        self.tokenizer = SVDSQuareTokenizer(
             image_size=image_size, embedding_dim=embedding_dim, dispersion=dispersion
         )
 
