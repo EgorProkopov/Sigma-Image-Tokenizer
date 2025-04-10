@@ -5,13 +5,13 @@ from src.tokenizers.positional_encoding import PositionalEncoding
 
 
 class SVDLinearTokenizer(nn.Module):
-    def __init__(self, image_size, embedding_dim, dispersion=0.9, full_matrices=True):
+    def __init__(self, image_size, num_channels, embedding_dim, dispersion=0.9, full_matrices=True):
         super().__init__()
 
         self.dispersion = dispersion
         self.full_matrices = full_matrices
 
-        self.embedder = nn.Linear(in_features=image_size * 2, out_features=embedding_dim)
+        self.embedder = nn.Linear(in_features=image_size * 2 * num_channels, out_features=embedding_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
@@ -38,7 +38,7 @@ class SVDLinearTokenizer(nn.Module):
             rank = S_lin.shape[1]
 
         approx_U, approx_S, approx_V = U[:, :, :rank], S[:, :rank], V[:, :, :rank]
-
+        # print(rank)
         return approx_U, approx_S, approx_V, rank
 
     def batched_get_approx_svd(self, batch: torch.Tensor):
@@ -73,11 +73,11 @@ class SVDLinearTokenizer(nn.Module):
         #  New shape: [rank, channels, image_size * 2]
         raw_embedding = torch.cat([approx_US, approx_SV], dim=-1)
 
-        # New shape: [rank * channels, image_size * 2]
+        # New shape: [rank, image_size * 2 * channels]
         channels = raw_embedding.shape[1]
         rank = raw_embedding.shape[0]
         token_dim = raw_embedding.shape[-1]
-        raw_embedding = raw_embedding.reshape(rank * channels, token_dim)
+        raw_embedding = raw_embedding.reshape(rank, token_dim * channels)
 
         return raw_embedding
 
@@ -129,13 +129,13 @@ class SVDLinearTokenizer(nn.Module):
 
 
 class SVDSquareTokenizer(nn.Module):
-    def __init__(self, image_size, embedding_dim, dispersion=0.9, full_matrices=True):
+    def __init__(self, image_size, num_channels, embedding_dim, dispersion=0.9, full_matrices=True):
         super().__init__()
 
         self.dispersion = dispersion
         self.full_matrices = full_matrices
 
-        self.embedder = nn.Linear(in_features=image_size * 2, out_features=embedding_dim)
+        self.embedder = nn.Linear(in_features=image_size * 2 * num_channels, out_features=embedding_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
@@ -147,12 +147,8 @@ class SVDSquareTokenizer(nn.Module):
         U, S, Vh = torch.linalg.svd(image, full_matrices=self.full_matrices)
         V = Vh.mH
 
-        print(f"S shape: {S.shape}")
-
         S_squared = torch.square(S)
         S_squared = S_squared.sum(dim=0, keepdim=True)
-
-        print(f"S_squared shape after sum: {S_squared.shape}")
 
         S_cumsum = torch.cumsum(S_squared, dim=1)
         total_sum = S_squared.sum()
@@ -202,11 +198,13 @@ class SVDSquareTokenizer(nn.Module):
         #  New shape: [rank, channels, image_size * 2]
         raw_embedding = torch.cat([approx_US, approx_SV], dim=-1)
 
-        # New shape: [rank * channels, image_size * 2]
+        # New shape: [rank, image_size * 2 * channels]
         channels = raw_embedding.shape[1]
         rank = raw_embedding.shape[0]
         token_dim = raw_embedding.shape[-1]
-        raw_embedding = raw_embedding.reshape(rank * channels, token_dim)
+        raw_embedding = raw_embedding.reshape(rank, token_dim * channels)
+
+        print(raw_embedding.shape)
 
         return raw_embedding
 

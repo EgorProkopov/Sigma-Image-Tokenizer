@@ -36,9 +36,7 @@ class VisionTransformer(nn.Module):
             n_heads=n_heads
         )
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, n_classes)
+            nn.Linear(embedding_dim, n_classes)
         )
 
     def forward(self, tensor):
@@ -53,6 +51,7 @@ class SVDLinearViT(nn.Module):
     def __init__(
             self,
             image_size: int = 512,
+            num_channels: int = 3,
             embedding_dim: int = 768,
             dispersion: float = 0.999,
             qkv_dim: int = 64,
@@ -64,7 +63,7 @@ class SVDLinearViT(nn.Module):
         super().__init__()
 
         self.tokenizer = SVDLinearTokenizer(
-            image_size=image_size, embedding_dim=embedding_dim, dispersion=dispersion
+            image_size=image_size, num_channels=num_channels, embedding_dim=embedding_dim, dispersion=dispersion
         )
 
         self.transformer_encoder = TransformerEncoder(
@@ -76,9 +75,7 @@ class SVDLinearViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, n_classes)
+            nn.Linear(embedding_dim, n_classes)
         )
 
     def forward(self, tensor):
@@ -93,6 +90,7 @@ class SVDSquareViT(nn.Module):
     def __init__(
             self,
             image_size: int = 512,
+            num_channels: int = 3,
             embedding_dim: int = 768,
             dispersion: float = 0.999,
             qkv_dim: int = 64,
@@ -104,7 +102,7 @@ class SVDSquareViT(nn.Module):
         super().__init__()
 
         self.tokenizer = SVDSquareTokenizer(
-            image_size=image_size, embedding_dim=embedding_dim, dispersion=dispersion
+            image_size=image_size, num_channels=num_channels, embedding_dim=embedding_dim, dispersion=dispersion
         )
 
         self.transformer_encoder = TransformerEncoder(
@@ -116,9 +114,7 @@ class SVDSquareViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, 1024),
-            nn.GELU(),
-            nn.Linear(1024, n_classes)
+            nn.Linear(embedding_dim, n_classes)
         )
 
     def forward(self, tensor):

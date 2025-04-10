@@ -3,7 +3,7 @@ import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 from src.models.transformer import VisionTransformer
-from src.models.transformer import SVDSquareViT
+from src.models.transformer import SVDLinearViT, SVDSquareViT
 
 
 class CustomLightningModule(pl.LightningModule):
@@ -89,7 +89,7 @@ class CustomLightningModule(pl.LightningModule):
         self.val_recall.update(preds, labels)
         self.val_f1.update(preds, labels)
 
-        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_loss", loss, prog_bar=False)
         return loss
 
     def on_validation_epoch_end(self):
@@ -98,10 +98,10 @@ class CustomLightningModule(pl.LightningModule):
         rec = self.val_recall.compute()
         f1 = self.val_f1.compute()
 
-        self.log("val_accuracy_epoch", acc)
-        self.log("val_precision_epoch", prec)
-        self.log("val_recall_epoch", rec)
-        self.log("val_f1_epoch", f1)
+        self.log("val_accuracy_epoch", acc, prog_bar=True)
+        self.log("val_precision_epoch", prec, prog_bar=True)
+        self.log("val_recall_epoch", rec, prog_bar=True)
+        self.log("val_f1_epoch", f1, prog_bar=True)
 
         self.val_accuracy.reset()
         self.val_precision.reset()
@@ -131,7 +131,7 @@ class ViTLightingModule(CustomLightningModule):
 
 class SVDLinearViTLightingModule(CustomLightningModule):
     def __init__(self, model_hparams, criterion, lr, log_step=1000):
-        model = SVDLInearViT(
+        model = SVDLinearViT(
             image_size=model_hparams["image_size"],
             embedding_dim=model_hparams["embedding_dim"],
             dispersion=model_hparams["dispersion"],
