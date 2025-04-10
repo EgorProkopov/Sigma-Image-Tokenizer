@@ -1,0 +1,26 @@
+dataset:
+  train_root_dir: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/train'
+  val_root_dir: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/val'
+  test_root_dir: ""
+  classes_names_path: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/classes_names.txt'
+
+model_hparams:
+  image_size: 224
+  embedding_dim: 768
+  dispersion: 0.900
+  qkv_dim: 64
+  mlp_hidden_size: 3072
+  n_layers: 12
+  n_heads: 12
+  n_classes: 10
+
+train_hparams:
+    lr: 1e-4
+    train_batch_size: 12
+    val_batch_size: 12
+    num_workers: 6
+    max_epoch: 20
+    accelerator: "mps"
+
+logging:
+  logging_step: 100

@@ -3,7 +3,7 @@ import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 from src.models.transformer import VisionTransformer
-from src.models.transformer import SVDViT
+from src.models.transformer import SVDSquareViT
 
 
 class CustomLightningModule(pl.LightningModule):
@@ -128,9 +128,25 @@ class ViTLightingModule(CustomLightningModule):
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
 
-class SVDViTLightingModule(CustomLightningModule):
+
+class SVDLinearViTLightingModule(CustomLightningModule):
     def __init__(self, model_hparams, criterion, lr, log_step=1000):
-        model = SVDViT(
+        model = SVDLInearViT(
+            image_size=model_hparams["image_size"],
+            embedding_dim=model_hparams["embedding_dim"],
+            dispersion=model_hparams["dispersion"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+            n_classes=model_hparams["n_classes"]
+        )
+        super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+
+
+class SVDSquareViTLightingModule(CustomLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = SVDSquareViT(
             image_size=model_hparams["image_size"],
             embedding_dim=model_hparams["embedding_dim"],
             dispersion=model_hparams["dispersion"],

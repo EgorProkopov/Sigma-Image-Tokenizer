@@ -164,3 +164,9 @@ cython_debug/
 /src/scripts/lightning_logs
 /src/scripts/lightning_logs
 /src/scripts/data
+src/scripts/.DS_Store
+configs/svd_square_vit_train.yaml
+configs/svdvit_train.yaml
+configs/vit_train.yaml
+configs/svdvit_train.yaml
+configs/vit_train.yaml

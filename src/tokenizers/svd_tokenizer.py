@@ -4,7 +4,7 @@ import torch.nn as nn
 from src.tokenizers.positional_encoding import PositionalEncoding
 
 
-class SVDSLinearTokenizer(nn.Module):
+class SVDLinearTokenizer(nn.Module):
     def __init__(self, image_size, embedding_dim, dispersion=0.9, full_matrices=True):
         super().__init__()
 
@@ -128,7 +128,7 @@ class SVDSLinearTokenizer(nn.Module):
         return approx_image
 
 
-class SVDSQuareTokenizer(nn.Module):
+class SVDSquareTokenizer(nn.Module):
     def __init__(self, image_size, embedding_dim, dispersion=0.9, full_matrices=True):
         super().__init__()
 
@@ -147,8 +147,12 @@ class SVDSQuareTokenizer(nn.Module):
         U, S, Vh = torch.linalg.svd(image, full_matrices=self.full_matrices)
         V = Vh.mH
 
+        print(f"S shape: {S.shape}")
+
         S_squared = torch.square(S)
         S_squared = S_squared.sum(dim=0, keepdim=True)
+
+        print(f"S_squared shape after sum: {S_squared.shape}")
 
         S_cumsum = torch.cumsum(S_squared, dim=1)
         total_sum = S_squared.sum()
