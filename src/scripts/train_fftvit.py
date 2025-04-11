@@ -7,6 +7,7 @@ from src.models.lightning_modules import FFTViTLightingModule
 from src.utils import set_seed
 from src.scripts.train import train_model
 
+
 def main():
     set_seed(239)
     config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\fft_vit_train.yaml")
@@ -33,4 +34,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
