@@ -155,9 +155,8 @@ class ModifiedSVDTokenizer(nn.Module):
         # sorted_sigmas = sigmas
         # sorted_weighted_tokens = weighted_tokens
 
-        if self.training:
-            sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
-            print(lengths.max().item())
+        sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
+        print(lengths.max().item())
 
 
         tokens = self.linear_projection(sorted_weighted_tokens)
