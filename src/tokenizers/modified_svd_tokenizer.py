@@ -4,7 +4,7 @@ import torch.nn as nn
 from src.tokenizers.positional_encoding import PositionalEncoding
 
 
-class TinyResNet(nn.Module):
+class TinyFeatureExtractor(nn.Module):
     def __init__(self, in_channels=3, n_features=12):
         super().__init__()
 
@@ -18,24 +18,21 @@ class TinyResNet(nn.Module):
         )
 
         self.block_2 = nn.Sequential(
-            nn.Conv2d(in_channels=4, out_channels=8, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(8),
+            nn.Conv2d(in_channels=4, out_channels=6, kernel_size=3, padding=1, stride=1),
+            nn.BatchNorm2d(6),
             nn.LeakyReLU()
         )
 
         self.block_3 = nn.Sequential(
-            nn.Conv2d(in_channels=8, out_channels=self.n_features, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(in_channels=6, out_channels=self.n_features, kernel_size=3, padding=1, stride=1),
             nn.BatchNorm2d(self.n_features),
             nn.LeakyReLU()
         )
 
     def forward(self, x):
         out_1 = self.block_1(x)
-        out_1 = out_1 + x
         out_2 = self.block_2(out_1)
-        out_2 = out_2 + out_1
         out_3 = self.block_3(out_2)
-        out_3 = out_3 + out_1
 
         return out_3
 
@@ -48,8 +45,8 @@ class ModifiedSVDTokenizer(nn.Module):
         self.pixel_unshuffle_scale_factor = pixel_unshuffle_scale_factor
         self.dispersion=dispersion
 
-        self.u_feature_extractor = TinyResNet(in_channels=self.in_channels, n_features=n_features)
-        self.v_feature_extractor = TinyResNet(in_channels=self.in_channels, n_features=n_features)
+        self.u_feature_extractor = TinyFeatureExtractor(in_channels=self.in_channels, n_features=n_features)
+        self.v_feature_extractor = TinyFeatureExtractor(in_channels=self.in_channels, n_features=n_features)
 
         self.pixel_unshuffle = nn.PixelUnshuffle(downscale_factor=self.pixel_unshuffle_scale_factor)
 
@@ -74,7 +71,7 @@ class ModifiedSVDTokenizer(nn.Module):
                 in_features=n_features * (self.pixel_unshuffle_scale_factor ** 2) * 2,
                 out_features=128,
             ),
-            nn.BatchNorm1d(128),
+            nn.InstanceNorm1d(128),
             nn.LeakyReLU(),
             nn.Linear(
                 in_features=128, out_features=1
@@ -123,7 +120,7 @@ class ModifiedSVDTokenizer(nn.Module):
 
         sorted_sigmas_squeezed = sorted_sigmas.squeeze(dim=-1)
         sigma_sum = sorted_sigmas_squeezed.sum(dim=1, keepdim=True)
-        threshold = self.dispersion * sigma_sum
+        threshold = self.dispersion * sigma_sum.unsqueeze(-1)
 
         cumsum_sigma = sorted_sigmas.cumsum(dim=1)
         keep_mask = cumsum_sigma <= threshold
@@ -155,8 +152,12 @@ class ModifiedSVDTokenizer(nn.Module):
             index=sort_idxs.expand(-1, -1, weighted_tokens.size(2))
         )
 
+        # sorted_sigmas = sigmas
+        # sorted_weighted_tokens = weighted_tokens
+
         if self.training:
             sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
+            print(lengths.max().item())
 
 
         tokens = self.linear_projection(sorted_weighted_tokens)

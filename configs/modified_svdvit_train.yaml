@@ -5,10 +5,10 @@ dataset:
 
 model_hparams:
   num_channels: 3
-  n_features: 12
-  pixel_unshuffle_scale_factor: 4
+  n_features: 8
+  pixel_unshuffle_scale_factor: 16
   embedding_dim: 768
-  dispersion: 0.990
+  dispersion: 0.900
   qkv_dim: 64
   mlp_hidden_size: 3072
   n_layers: 12
@@ -21,7 +21,7 @@ train_hparams:
     val_batch_size: 12
     num_workers: 6
     max_epoch: 20
-    accelerator: "cuda"
+    accelerator: "mps"
 
 logging:
   logging_step: 100
