@@ -5,6 +5,7 @@ from torchmetrics import Accuracy, Precision, Recall, F1Score
 from src.models.transformer import VisionTransformer
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
+from src.models.transformer import ModifiedSVDViT
 
 
 class CustomLightningModule(pl.LightningModule):
@@ -167,6 +168,23 @@ class FFTViTLightingModule(CustomLightningModule):
             embedding_dim=model_hparams["embedding_dim"],
             filter_size=model_hparams["filter_size"],
             num_bins=model_hparams["num_bins"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+            n_classes=model_hparams["n_classes"]
+        )
+        super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+
+
+class ModifiedSVDViTLightingModule(CustomLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = ModifiedSVDViT(
+            num_channels=model_hparams["num_channels"],
+            n_features=model_hparams["n_features"],
+            pixel_unshuffle_scale_factor=model_hparams["pixel_unshuffle_scale_factor"],
+            embedding_dim=model_hparams["embedding_dim"],
+            dispersion=model_hparams["dispersion"],
             qkv_dim=model_hparams["qkv_dim"],
             mlp_hidden_size=model_hparams["mlp_hidden_size"],
             n_layers=model_hparams["n_layers"],
