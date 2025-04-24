@@ -8,11 +8,16 @@ from src.scripts.train import train_model
 
 def main():
     set_seed(239)
-    config = OmegaConf.load(r"/Users/egorprokopov/Documents/ITMO/BachelorThesis/Sigma-Image-Tokenizer/configs/modified_svdvit_train.yaml")
+    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\modified_svdvit_train.yaml")
     model_hparams = config["model_hparams"]
 
     criterion = torch.nn.CrossEntropyLoss()
-    model = ModifiedSVDViTLightingModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=config["logging"]["logging_step"])
+    model = ModifiedSVDViTLightingModule(
+        model_hparams, criterion,
+        lr=config["train_hparams"]["lr"],
+        alpha=config["train_hparams"]["alpha"],
+        log_step=config["logging"]["logging_step"]
+    )
 
     image_size = 256
 
