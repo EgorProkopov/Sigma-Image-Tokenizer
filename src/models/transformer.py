@@ -79,7 +79,9 @@ class SVDLinearViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes)
+            nn.Linear(embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_classes)
         )
 
     def forward(self, tensor):
@@ -118,7 +120,9 @@ class SVDSquareViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes)
+            nn.Linear(embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_classes)
         )
 
     def forward(self, tensor):
@@ -159,7 +163,9 @@ class FFTViT(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes)
+            nn.Linear(embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_classes)
         )
 
     def forward(self, tensor):
