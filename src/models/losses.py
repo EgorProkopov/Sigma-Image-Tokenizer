@@ -23,4 +23,4 @@ class GiniLoss(nn.Module):
         sum_diff = torch.sum(diff)
 
         gini = sum_diff / (2 * (n ** 2) * mu)
-        return gini
+        return 1 - gini
