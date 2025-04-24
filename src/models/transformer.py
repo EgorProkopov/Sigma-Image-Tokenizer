@@ -216,10 +216,8 @@ class ModifiedSVDViT(nn.Module):
         )
 
     def forward(self, tensor):
-        tokenizer_output = self.tokenizer(tensor)
-        tokens = tokenizer_output["tokens"]
-        sigmas = tokenizer_output["sigmas"]
-        tokens = self.transformer_encoder(tokens)
-        tokens = tokens[:, 0]
-        logits = self.classifier(tokens)
-        return {"logits": logits, "sigmas": sigmas}
+        x = self.tokenizer(tensor)
+        x = self.transformer_encoder(x)
+        x = x[:, 0]
+        logits = self.classifier(x)
+        return logits

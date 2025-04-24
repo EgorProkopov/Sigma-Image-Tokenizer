@@ -163,5 +163,5 @@ class ModifiedSVDTokenizer(nn.Module):
         tokens = self.__add_cls_token(tokens)
         tokens = self.__add_positional_encoding(tokens)
 
-        return {"tokens": tokens, "sigmas": sorted_sigmas}
+        return tokens
 
