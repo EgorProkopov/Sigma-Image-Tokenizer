@@ -8,8 +8,11 @@ def train_model(model, config, transform):
     model_hparams = config["model_hparams"]
     train_hparams = config["train_hparams"]
 
-    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
-    val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+    train_dataset = datasets.ImageFolder(r"F:\research\data\intel_multiclass\seg_train", transform=transform)
+    val_dataset = datasets.ImageFolder(r"F:\research\data\intel_multiclass\seg_test", transform=transform)
+
+    # train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    # val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 
     train_size = len(train_dataset)
     val_size = len(val_dataset)

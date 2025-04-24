@@ -170,3 +170,7 @@ configs/svdvit_train.yaml
 configs/vit_train.yaml
 configs/svdvit_train.yaml
 configs/vit_train.yaml
+/src/scripts/VOCdevkit
+configs/vit_train.yaml
+configs/svdvit_train.yaml
+/configs

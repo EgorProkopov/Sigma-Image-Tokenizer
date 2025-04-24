@@ -1,8 +1,7 @@
 dataset:
-  train_root_dir: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/train'
-  val_root_dir: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/val'
-  test_root_dir: ""
-  classes_names_path: '/Users/egorprokopov/Documents/ITMO/BachelorThesis/data/full_imagenet/classes_names.txt'
+  train_root_dir: "F:\\research\\data\\small_imagenet_object_loc\\train"
+  val_root_dir: "F:\\research\\data\\small_imagenet_object_loc\\val"
+  classes_names_path: "F:\\research\\data\\small_imagenet_object_loc\\classes_names.txt"
 
 model_hparams:
   image_size: 224
@@ -20,7 +19,7 @@ train_hparams:
     val_batch_size: 12
     num_workers: 6
     max_epoch: 20
-    accelerator: "mps"
+    accelerator: "cuda"
 
 logging:
   logging_step: 100

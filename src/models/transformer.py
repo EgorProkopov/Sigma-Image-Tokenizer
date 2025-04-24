@@ -38,7 +38,9 @@ class VisionTransformer(nn.Module):
             n_heads=n_heads
         )
         self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim, n_classes)
+            nn.Linear(embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_classes)
         )
 
     def forward(self, tensor):
