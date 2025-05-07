@@ -5,7 +5,7 @@ from torchmetrics import Accuracy, Precision, Recall, F1Score
 from src.models.transformer import VisionTransformer
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
-from src.models.transformer import ModifiedSVDViT
+from src.models.transformer import MSVDNoScorerViT
 
 
 class CustomLightningModule(pl.LightningModule):
@@ -177,12 +177,11 @@ class FFTViTLightingModule(CustomLightningModule):
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
 
 
-class ModifiedSVDViTLightingModule(CustomLightningModule):
+class MSVDNoScorerViTLightingModule(CustomLightningModule):
     def __init__(self, model_hparams, criterion, lr, log_step=1000):
-        model = ModifiedSVDViT(
+        model = MSVDNoScorerViT(
             num_channels=model_hparams["num_channels"],
-            n_features=model_hparams["n_features"],
-            pixel_unshuffle_scale_factor=model_hparams["pixel_unshuffle_scale_factor"],
+            pixel_unshuffle_scale_factors=model_hparams["pixel_unshuffle_scale_factors"],
             embedding_dim=model_hparams["embedding_dim"],
             dispersion=model_hparams["dispersion"],
             qkv_dim=model_hparams["qkv_dim"],

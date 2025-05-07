@@ -6,7 +6,7 @@ from src.models.modules import TransformerEncoder
 from src.tokenizers.vit_tokenization import ViTTokenization
 from src.tokenizers.svd_tokenizer import SVDLinearTokenizer, SVDSquareTokenizer
 from src.tokenizers.fft_tokenizer import FFTTokenizer
-from src.tokenizers.modified_svd_tokenizer import ModifiedSVDTokenizer
+from src.tokenizers.modified_svd_tokenizer import MSVDNoScorerTokenizer
 
 
 class VisionTransformer(nn.Module):
@@ -177,12 +177,11 @@ class FFTViT(nn.Module):
         return logits
 
 
-class ModifiedSVDViT(nn.Module):
+class MSVDNoScorerViT(nn.Module):
     def __init__(
             self,
             num_channels: int = 3,
-            n_features: int = 12,
-            pixel_unshuffle_scale_factor: int=4,
+            pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
             embedding_dim: int = 768,
             dispersion: float = 0.900,
             qkv_dim: int = 64,
@@ -193,10 +192,9 @@ class ModifiedSVDViT(nn.Module):
     ):
         super().__init__()
 
-        self.tokenizer = ModifiedSVDTokenizer(
+        self.tokenizer = MSVDNoScorerTokenizer(
             in_channels=num_channels,
-            n_features=n_features,
-            pixel_unshuffle_scale_factor=pixel_unshuffle_scale_factor,
+            pixel_unshuffle_scale_factors=pixel_unshuffle_scale_factors,
             dispersion=dispersion,
             embedding_dim=embedding_dim,
         )

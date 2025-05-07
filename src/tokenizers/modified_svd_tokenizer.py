@@ -4,71 +4,71 @@ import torch.nn as nn
 from src.tokenizers.positional_encoding import PositionalEncoding
 
 
-class TinyFeatureExtractor(nn.Module):
-    def __init__(self, in_channels=3, n_features=12):
+class MSVDNoScorerTokenizer(nn.Module):
+    def __init__(
+            self,
+            in_channels=3,
+            pixel_unshuffle_scale_factors=[2, 2, 2, 2],
+            dispersion=0.9,
+            embedding_dim=768
+    ):
         super().__init__()
 
         self.in_channels = in_channels
-        self.n_features = n_features
-
-        self.block_1 = nn.Sequential(
-            nn.Conv2d(in_channels=self.in_channels, out_channels=4, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(4),
-            nn.LeakyReLU()
-        )
-
-        self.block_2 = nn.Sequential(
-            nn.Conv2d(in_channels=4, out_channels=6, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(6),
-            nn.LeakyReLU()
-        )
-
-        self.block_3 = nn.Sequential(
-            nn.Conv2d(in_channels=6, out_channels=self.n_features, kernel_size=3, padding=1, stride=1),
-            nn.BatchNorm2d(self.n_features),
-            nn.LeakyReLU()
-        )
-
-    def forward(self, x):
-        out_1 = self.block_1(x)
-        out_2 = self.block_2(out_1)
-        out_3 = self.block_3(out_2)
-
-        return out_3
-
-
-class ModifiedSVDTokenizer(nn.Module):
-    def __init__(self, in_channels=3, n_features=12, pixel_unshuffle_scale_factor=4, dispersion=0.9, embedding_dim=768):
-        super().__init__()
-
-        self.in_channels=in_channels
-        self.pixel_unshuffle_scale_factor = pixel_unshuffle_scale_factor
+        self.pixel_unshuffle_scale_factors = pixel_unshuffle_scale_factors
         self.dispersion=dispersion
 
-        self.u_feature_extractor = TinyFeatureExtractor(in_channels=self.in_channels, n_features=n_features)
-        self.v_feature_extractor = TinyFeatureExtractor(in_channels=self.in_channels, n_features=n_features)
+        self.u_feature_extractor = nn.ModuleList()
+        current_channels = self.in_channels
+        for scale in self.pixel_unshuffle_scale_factors:
+            self.u_feature_extractor.append(
+                nn.Conv2d(
+                    in_channels=current_channels,
+                    out_channels=current_channels,
+                    kernel_size=3, padding=1, stride=1
+                ),
+            )
+            self.u_feature_extractor.append(nn.BatchNorm2d(current_channels))
+            self.u_feature_extractor.append(nn.LeakyReLU())
+            self.u_feature_extractor.append(nn.PixelUnshuffle(downscale_factor=scale))
+            current_channels = current_channels * (scale ** 2)
+        self.u_feature_extractor = nn.Sequential(*self.u_feature_extractor)
 
-        self.pixel_unshuffle = nn.PixelUnshuffle(downscale_factor=self.pixel_unshuffle_scale_factor)
+        self.v_feature_extractor = nn.ModuleList()
+        current_channels = self.in_channels
+        for scale in self.pixel_unshuffle_scale_factors:
+            self.v_feature_extractor.append(
+                nn.Conv2d(
+                    in_channels=current_channels,
+                    out_channels=current_channels,
+                    kernel_size=3, padding=1, stride=1
+                )
+            )
+            self.v_feature_extractor.append(nn.BatchNorm2d(current_channels))
+            self.v_feature_extractor.append(nn.LeakyReLU())
+            self.v_feature_extractor.append(nn.PixelUnshuffle(downscale_factor=scale))
+            current_channels = current_channels * (scale ** 2)
+        self.v_feature_extractor = nn.Sequential(*self.v_feature_extractor)
 
         self.projection_u = nn.Conv2d(
-            in_channels=n_features * (self.pixel_unshuffle_scale_factor ** 2),
-            out_channels=n_features * (self.pixel_unshuffle_scale_factor ** 2),
+            in_channels=current_channels,
+            out_channels=current_channels,
             kernel_size=1, stride=1, padding=0, bias=False
         )
         self.projection_v = nn.Conv2d(
-            in_channels=n_features * (self.pixel_unshuffle_scale_factor ** 2),
-            out_channels=n_features * (self.pixel_unshuffle_scale_factor ** 2),
+            in_channels=current_channels,
+            out_channels=current_channels,
             kernel_size=1, stride=1, padding=0, bias=False
         )
 
         self.linear_projection = nn.Linear(
-            in_features=n_features * (self.pixel_unshuffle_scale_factor ** 2) * 2,
+            in_features=current_channels * 2,
             out_features=embedding_dim
         )
 
         self.mlp_scorer = nn.Sequential(
             nn.Linear(
-                in_features=n_features * (self.pixel_unshuffle_scale_factor ** 2) * 2,
+                in_features=embedding_dim,
                 out_features=128,
             ),
             nn.InstanceNorm1d(128),
@@ -79,7 +79,6 @@ class ModifiedSVDTokenizer(nn.Module):
             nn.ReLU()
         )
 
-
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
@@ -88,11 +87,8 @@ class ModifiedSVDTokenizer(nn.Module):
         raw_u = self.u_feature_extractor(x)
         raw_v = self.v_feature_extractor(x)
 
-        unshuffled_u = self.pixel_unshuffle(raw_u)
-        unshuffled_v = self.pixel_unshuffle(raw_v)
-
-        projected_u = self.projection_u(unshuffled_u)
-        projected_v = self.projection_v(unshuffled_v)
+        projected_u = self.projection_u(raw_u)
+        projected_v = self.projection_v(raw_v)
 
         projected_u = projected_u.permute(0, 2, 3, 1).contiguous()
         projected_v = projected_v.permute(0, 2, 3, 1).contiguous()
@@ -136,30 +132,30 @@ class ModifiedSVDTokenizer(nn.Module):
 
     def forward(self, x):
         raw_tokens = self.__get_raw_tokens(x)
-        sigmas = self.mlp_scorer(raw_tokens)
-        weighted_tokens = raw_tokens * sigmas
+        # sigmas = self.mlp_scorer(raw_tokens)
+        # weighted_tokens = raw_tokens * sigmas
 
-        # Sort in sigma-ascending order
-        sort_idxs = torch.argsort(sigmas, dim=1)
-        sorted_sigmas = torch.gather(
-            sigmas,  # (B, N, 1)
-            dim=1,
-            index=sort_idxs  # (B, N, 1)
-        )
-        sorted_weighted_tokens = torch.gather(
-            weighted_tokens,  # (B, N, 2C)
-            dim=1,
-            index=sort_idxs.expand(-1, -1, weighted_tokens.size(2))
-        )
+        # # Sort in sigma-ascending order
+        # sort_idxs = torch.argsort(sigmas, dim=1)
+        # sorted_sigmas = torch.gather(
+        #     sigmas,  # (B, N, 1)
+        #     dim=1,
+        #     index=sort_idxs  # (B, N, 1)
+        # )
+        # sorted_weighted_tokens = torch.gather(
+        #     weighted_tokens,  # (B, N, 2C)
+        #     dim=1,
+        #     index=sort_idxs.expand(-1, -1, weighted_tokens.size(2))
+        # )
 
         # sorted_sigmas = sigmas
         # sorted_weighted_tokens = weighted_tokens
 
-        sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
-        print(lengths.max().item())
+        # sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
+        # print(lengths.max().item())
 
 
-        tokens = self.linear_projection(sorted_weighted_tokens)
+        tokens = self.linear_projection(raw_tokens)
         tokens = self.__add_cls_token(tokens)
         tokens = self.__add_positional_encoding(tokens)
 
