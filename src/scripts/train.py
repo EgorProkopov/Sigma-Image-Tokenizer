@@ -19,7 +19,6 @@ def train_model(model, config, transform):
     print(f"Размер тренировочного датасета: {train_size}")
     print(f"Размер валидационного датасета: {val_size}")
 
-    # Создаем DataLoader-ы
     train_loader = DataLoader(
         train_dataset,
         batch_size=train_hparams["train_batch_size"],
@@ -33,16 +32,13 @@ def train_model(model, config, transform):
         num_workers=train_hparams["num_workers"]
     )
 
-    # Дополнительная настройка для CUDA (если требуется)
     if train_hparams.get("accelerator") == "cuda":
         torch.set_float32_matmul_precision('medium')
 
-    # Создаем Trainer
     trainer = pl.Trainer(
         max_epochs=train_hparams["max_epoch"],
         accelerator=train_hparams["accelerator"],
         log_every_n_steps=100
     )
 
-    # Обучаем модель
     trainer.fit(model, train_loader, val_loader)

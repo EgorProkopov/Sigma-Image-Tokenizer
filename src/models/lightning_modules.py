@@ -2,10 +2,11 @@ import torch
 import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
+from src.models.losses import GatedLoss
 from src.models.transformer import VisionTransformer
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
-from src.models.transformer import MSVDNoScorerViT
+from src.models.transformer import MSVDNoScorerViT, MSVDSigmoidGatingViT
 
 
 class CustomLightningModule(pl.LightningModule):
@@ -192,3 +193,95 @@ class MSVDNoScorerViTLightingModule(CustomLightningModule):
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
 
+
+class MSVDSigmoidGatingViTLightningModule(CustomLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = MSVDSigmoidGatingViT(
+            num_channels=model_hparams["num_channels"],
+            pixel_unshuffle_scale_factors=model_hparams["pixel_unshuffle_scale_factors"],
+            embedding_dim=model_hparams["embedding_dim"],
+            dispersion=model_hparams["dispersion"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+            n_classes=model_hparams["n_classes"]
+        )
+        super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+
+        self.alpha = model_hparams["alpha"]
+        self.gated_loss = GatedLoss()
+
+    def forward(self, x):
+        msvd_output = self.model(x)
+        return msvd_output
+
+    def training_step(self, batch, batch_idx):
+        # images = batch["image"]
+        # labels = batch["label_encoded"]
+
+        images, labels = batch
+
+        msvd_output = self.forward(images)
+        logits = msvd_output["logits"]
+        scores = msvd_output["scores"]
+        gates = torch.nn.functional.sigmoid(scores)
+
+        ce_loss = self.criterion(logits, labels)
+        auxiliary_loss = self.alpha * self.gated_loss(gates)
+        loss = ce_loss + auxiliary_loss
+
+        self.log("train_loss", loss, prog_bar=True)
+        self.log("auxiliary_loss", auxiliary_loss, prog_bar=True)
+
+        preds = torch.argmax(logits, dim=1)
+        # labels = torch.argmax(labels, dim=1)
+
+        self.train_accuracy.update(preds, labels)
+        self.train_precision.update(preds, labels)
+        self.train_recall.update(preds, labels)
+        self.train_f1.update(preds, labels)
+
+        if self.global_step % self.log_step == 0 and self.global_step != 0:
+            acc = self.train_accuracy.compute()
+            prec = self.train_precision.compute()
+            rec = self.train_recall.compute()
+            f1 = self.train_f1.compute()
+
+            self.log("train_accuracy", acc, prog_bar=True)
+            self.log("train_precision", prec, prog_bar=True)
+            self.log("train_recall", rec, prog_bar=True)
+            self.log("train_f1", f1, prog_bar=True)
+
+            self.train_accuracy.reset()
+            self.train_precision.reset()
+            self.train_recall.reset()
+            self.train_f1.reset()
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        # images = batch["image"]
+        # labels = batch["label_encoded"]
+
+        images, labels = batch
+
+        msvd_output = self.forward(images)
+        logits = msvd_output["logits"]
+        scores = msvd_output["scores"]
+        gates = torch.nn.functional.sigmoid(scores)
+
+        ce_loss = self.criterion(logits, labels)
+        auxiliary_loss = self.alpha * self.gated_loss(gates)
+        loss = ce_loss + auxiliary_loss
+
+        preds = torch.argmax(logits, dim=1)
+        # labels = torch.argmax(labels, dim=1)
+
+        self.val_accuracy.update(preds, labels)
+        self.val_precision.update(preds, labels)
+        self.val_recall.update(preds, labels)
+        self.val_f1.update(preds, labels)
+
+        self.log("val_loss", loss, prog_bar=False)
+        return loss

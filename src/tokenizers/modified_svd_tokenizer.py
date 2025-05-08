@@ -66,24 +66,11 @@ class MSVDNoScorerTokenizer(nn.Module):
             out_features=embedding_dim
         )
 
-        self.mlp_scorer = nn.Sequential(
-            nn.Linear(
-                in_features=embedding_dim,
-                out_features=128,
-            ),
-            nn.InstanceNorm1d(128),
-            nn.LeakyReLU(),
-            nn.Linear(
-                in_features=128, out_features=1
-            ),
-            nn.ReLU()
-        )
-
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
 
-    def __get_raw_tokens(self, x):
+    def _get_raw_tokens(self, x):
         raw_u = self.u_feature_extractor(x)
         raw_v = self.v_feature_extractor(x)
 
@@ -100,18 +87,18 @@ class MSVDNoScorerTokenizer(nn.Module):
         raw_tokens = torch.cat([tokens_u, tokens_v], dim=-1)
         return raw_tokens
 
-    def __add_cls_token(self, tokens):
+    def _add_cls_token(self, tokens):
         batch_size = tokens.shape[0]
         cls_token = self.cls_token.expand(batch_size, -1, -1)
         tokens = torch.cat([cls_token, tokens], dim=1)
         return tokens
 
-    def __add_positional_encoding(self, tokens):
+    def _add_positional_encoding(self, tokens):
         positional_encoding = self.positional_encoding(tokens)
         tokens = tokens + positional_encoding
         return tokens
 
-    def __filter_tokens(self, sorted_weighted_tokens, sorted_sigmas):
+    def _filter_tokens(self, sorted_weighted_tokens, sorted_sigmas):
         batch_size, n_tokens, raw_tokens_dim = sorted_weighted_tokens.shape
 
         sorted_sigmas_squeezed = sorted_sigmas.squeeze(dim=-1)
@@ -131,7 +118,7 @@ class MSVDNoScorerTokenizer(nn.Module):
         return padded, lengths
 
     def forward(self, x):
-        raw_tokens = self.__get_raw_tokens(x)
+        raw_tokens = self._get_raw_tokens(x)
         # sigmas = self.mlp_scorer(raw_tokens)
         # weighted_tokens = raw_tokens * sigmas
 
@@ -156,8 +143,44 @@ class MSVDNoScorerTokenizer(nn.Module):
 
 
         tokens = self.linear_projection(raw_tokens)
-        tokens = self.__add_cls_token(tokens)
-        tokens = self.__add_positional_encoding(tokens)
+        tokens = self._add_cls_token(tokens)
+        tokens = self._add_positional_encoding(tokens)
 
         return tokens
 
+
+class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
+    def __init__(
+            self,
+            in_channels=3,
+            pixel_unshuffle_scale_factors=[2, 2, 2, 2],
+            dispersion=0.9,
+            embedding_dim=768
+    ):
+        super().__init__(in_channels, pixel_unshuffle_scale_factors, dispersion, embedding_dim)
+
+        self.mlp_scorer = nn.Sequential(
+            nn.Linear(
+                in_features=embedding_dim,
+                out_features=128,
+            ),
+            nn.InstanceNorm1d(128),
+            nn.LeakyReLU(),
+            nn.Linear(
+                in_features=128, out_features=1
+            ),
+            # nn.ReLU()
+        )
+
+    def forward(self, x):
+        raw_tokens = self._get_raw_tokens(x)
+        tokens = self.linear_projection(raw_tokens)
+
+        scores = self.mlp_scorer(tokens)
+        gates = nn.functional.sigmoid(scores)
+        gated_tokens = tokens * gates
+
+        tokens = self._add_cls_token(gated_tokens)
+        tokens = self._add_positional_encoding(tokens)
+
+        return {"tokens": tokens, "scores": scores}
