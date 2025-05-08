@@ -149,15 +149,60 @@ class MSVDNoScorerTokenizer(nn.Module):
         return tokens
 
 
+# class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
+#     def __init__(
+#             self,
+#             in_channels=3,
+#             pixel_unshuffle_scale_factors=[2, 2, 2, 2],
+#             dispersion=0.9,
+#             embedding_dim=768
+#     ):
+#         super().__init__(in_channels, pixel_unshuffle_scale_factors, dispersion, embedding_dim)
+#
+#         self.mlp_scorer = nn.Sequential(
+#             nn.Linear(
+#                 in_features=embedding_dim,
+#                 out_features=128,
+#             ),
+#             nn.InstanceNorm1d(128),
+#             nn.LeakyReLU(),
+#             nn.Linear(
+#                 in_features=128, out_features=1
+#             ),
+#             # nn.ReLU()
+#         )
+#
+#     def forward(self, x):
+#         raw_tokens = self._get_raw_tokens(x)
+#         tokens = self.linear_projection(raw_tokens)
+#
+#         scores = self.mlp_scorer(tokens)
+#         gates = nn.functional.sigmoid(scores)
+#         gated_tokens = tokens * gates
+#
+#         tokens = self._add_cls_token(gated_tokens)
+#         tokens = self._add_positional_encoding(tokens)
+#
+#         return {"tokens": tokens, "scores": scores}
+
+
 class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
     def __init__(
-            self,
-            in_channels=3,
-            pixel_unshuffle_scale_factors=[2, 2, 2, 2],
-            dispersion=0.9,
-            embedding_dim=768
+        self,
+        in_channels: int = 3,
+        pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
+        embedding_dim: int = 768,
+        selection_mode: str = "full",
+        top_k: int = None,
+        dispersion: float = None,
     ):
         super().__init__(in_channels, pixel_unshuffle_scale_factors, dispersion, embedding_dim)
+        modes = {"full", "top-k", "dispersion"}
+        assert selection_mode in modes, f"selection_mode must be one of {modes}"
+        if selection_mode == "top-k":
+            assert top_k is not None and top_k > 0, "top-k value must be positive"
+        self.selection_mode = selection_mode
+        self.top_k = top_k
 
         self.mlp_scorer = nn.Sequential(
             nn.Linear(
@@ -172,15 +217,40 @@ class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
             # nn.ReLU()
         )
 
-    def forward(self, x):
-        raw_tokens = self._get_raw_tokens(x)
-        tokens = self.linear_projection(raw_tokens)
+    def _filter_tokens(self, tokens: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
+        gates = torch.sigmoid(scores)              # [B, N]
+        gated = tokens * gates.unsqueeze(-1)       # [B, N, E]
+        B, N, E = tokens.shape
 
-        scores = self.mlp_scorer(tokens)
-        gates = nn.functional.sigmoid(scores)
-        gated_tokens = tokens * gates
+        if self.training or self.selection_mode == "full":
+            return gated
 
-        tokens = self._add_cls_token(gated_tokens)
-        tokens = self._add_positional_encoding(tokens)
+        if self.selection_mode == "top-k":
+            k = min(self.top_k, N)
+            idx = scores.topk(k, dim=1).indices    # [B, k]
+            mask = torch.zeros_like(scores)
+            mask.scatter_(1, idx, 1.0)
+            return tokens * mask.unsqueeze(-1)
 
-        return {"tokens": tokens, "scores": scores}
+        gates_sorted, idx_sorted = gates.sort(dim=1, descending=True)  # [B, N]
+        cumsum = gates_sorted.cumsum(dim=1)                                # [B, N]
+        total = gates_sorted.sum(dim=1, keepdim=True)                   # [B, 1]
+        thresh = self.dispersion * total                                # [B, 1]
+        keep_sorted = cumsum <= thresh                                    # [B, N]
+        mask = torch.zeros_like(gates)
+        mask.scatter_(1, idx_sorted, keep_sorted.float())              # [B, N]
+        return tokens * mask.unsqueeze(-1)
+
+    def forward(self, x: torch.Tensor):
+        raw_tokens = self._get_raw_tokens(x)           # [B, N, C]
+        tokens = self.linear_projection(raw_tokens)    # [B, N, E]
+
+        scores = self.mlp_scorer(tokens).squeeze(-1)   # [B, N]
+
+        filtered = self._filter_tokens(tokens, scores) # [B, N, E]
+
+        out = self._add_cls_token(filtered)            # [B, N+1, E]
+        out = self._add_positional_encoding(out)
+
+        return {"tokens": out, "scores": scores}
+

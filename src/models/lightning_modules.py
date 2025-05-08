@@ -200,6 +200,8 @@ class MSVDSigmoidGatingViTLightningModule(CustomLightningModule):
             num_channels=model_hparams["num_channels"],
             pixel_unshuffle_scale_factors=model_hparams["pixel_unshuffle_scale_factors"],
             embedding_dim=model_hparams["embedding_dim"],
+            selection_mode=model_hparams["selection_mode"],
+            top_k=model_hparams["top_k"],
             dispersion=model_hparams["dispersion"],
             qkv_dim=model_hparams["qkv_dim"],
             mlp_hidden_size=model_hparams["mlp_hidden_size"],

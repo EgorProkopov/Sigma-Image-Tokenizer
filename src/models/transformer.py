@@ -227,6 +227,8 @@ class MSVDSigmoidGatingViT(nn.Module):
             num_channels: int = 3,
             pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
             embedding_dim: int = 768,
+            selection_mode: str = "full",
+            top_k: int = 25,
             dispersion: float = 0.900,
             qkv_dim: int = 64,
             mlp_hidden_size: int = 1024,
@@ -239,7 +241,9 @@ class MSVDSigmoidGatingViT(nn.Module):
         self.tokenizer = MSVDSigmoidGatingTokenizer(
             in_channels=num_channels,
             pixel_unshuffle_scale_factors=pixel_unshuffle_scale_factors,
+            selection_mode=selection_mode,
             dispersion=dispersion,
+            top_k=top_k,
             embedding_dim=embedding_dim,
         )
 
