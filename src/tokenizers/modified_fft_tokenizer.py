@@ -55,6 +55,7 @@ class FFTLowFreqFilter(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dict:
         freq = torch.fft.fft2(x, norm='ortho')  # [B, 3, W, H],
+        freq = torch.fft.fftshift(freq)
 
         real = freq.real  # [B, 3, W, H]
         imag = freq.imag  # [B, 3, W, H]
