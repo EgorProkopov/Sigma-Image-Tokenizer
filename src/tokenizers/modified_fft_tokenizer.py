@@ -55,23 +55,25 @@ class FFTLowFreqFilter(nn.Module):
 
     def forward(self, x: torch.Tensor) -> dict:
         freq = torch.fft.fft2(x, norm='ortho')  # [B, 3, W, H],
+        freq = torch.fft.fftshift(freq, dim=(-2, -1))
 
         real = freq.real  # [B, 3, W, H]
         imag = freq.imag  # [B, 3, W, H]
 
-        freq_cat = torch.cat([real, imag], dim=1)  # [B, 6, W, H]
+        # freq_cat = torch.cat([real, imag], dim=1)  # [B, 6, W, H]
 
-        # log_real = torch.sign(real) * torch.log1p(abs(real) + self.eps)
-        # log_imag = torch.sign(imag) * torch.log1p(abs(imag) + self.eps)
-        #
-        # freq_cat = torch.cat([log_real, log_imag], dim=1)  # [B, 6, W, H]
+        log_real = torch.sign(real) * torch.log1p(abs(real) + self.eps)
+        log_imag = torch.sign(imag) * torch.log1p(abs(imag) + self.eps)
+
+        freq_cat = torch.cat([log_real, log_imag], dim=1)  # [B, 6, W, H]
 
         B, C, W, H = freq_cat.shape
 
         filter_size = self.filter_size
         if filter_size == 0:
-            power_spectrum = torch.sqrt(real) + torch.sqrt(imag)
-            filter_size = self.compute_filter_size(power_spectrum)
+            power_spectrum = real.pow(2) + real.pow(2)
+            energy = power_spectrum.sum(dim=1)
+            filter_size = self.compute_filter_size(energy)
 
         cx, cy = W // 2, H // 2
         half = filter_size // 2
@@ -144,6 +146,8 @@ class MFFTTokenizer(nn.Module):
 
     def forward(self, x) -> dict:
         low_freq_output = self.low_freq_filter(x)  # [B, 6, fs, fs]
+
+
 
         low_freq_x = low_freq_output["tensor"]
         filter_size = low_freq_output["filter_size"]
