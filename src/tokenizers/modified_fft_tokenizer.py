@@ -1,166 +1,158 @@
 import torch
 import torch.nn as nn
+import torch.fft as fft
+from typing import Optional, List, Dict, Any
+from math import gcd
+from functools import reduce
 
 from src.tokenizers.positional_encoding import PositionalEncoding
 
 
+def _lcm_list(numbers: List[int]) -> int:
+    return reduce(lambda a, b: a * b // gcd(a, b), numbers, 1)
+
 class FFTLowFreqFilter(nn.Module):
     """
     Module to compute 2D FFT of a 3-channel image batch and extract low-frequency components.
+    Supports fixed or automatic filter_size selection, iterating by LCM of downscale factors.
 
     Input:
         x: Tensor of shape [B, 3, W, H]
     Output:
-        Tensor of shape [B, 6, filter_size, filter_size] containing real and imaginary
-        parts of the low-frequency region for each channel.
+        dict with:
+          - 'tensor': Tensor of shape [B, 6, filter_size, filter_size]
+          - 'filter_size': int
     """
-    def __init__(self, filter_size: int = 128, energy_ratio: float = 0.900):
+    def __init__(
+        self,
+        filter_size: int = 0,
+        energy_ratio: float = 0.9,
+        downscale_factors: Optional[List[int]] = None,
+        eps: float = 1e-8
+    ):
         super().__init__()
         self.filter_size = filter_size
         self.energy_ratio = energy_ratio
 
-        self.eps = 1e-8
+        self.downscale_factors = downscale_factors or []
+        self.lcm = _lcm_list(self.downscale_factors) if self.downscale_factors else 1
 
-    def compute_filter_size(self, power_spectrum: torch.Tensor) -> int:
+        self.eps = eps
+
+    def compute_filter_size(self, power: torch.Tensor) -> int:
         """
-        Compute minimal k such that sum of power_spectrum[..., :k, :k] >= energy_ratio * total_energy
-        Uses 2D cumulative sum (integral image) for efficient lookup.
-
-        E: [B, W, H] tensor of spectral energy (magnitude squared)
-        Returns: filter_size (int)
+        Compute minimal filter_size, iterating by LCM, such that
+        sum of power[..., :fs, :fs] >= energy_ratio * total_energy
+        power: [B, W, H]
+        Returns: filter_size (int, multiple of LCM)
         """
-        B, W, H = power_spectrum.shape
-
-        cumsum_h = torch.cumsum(power_spectrum, dim=1)        # [B, W, H]
-        integral = torch.cumsum(cumsum_h, dim=2) # [B, W, H]
-
-        total_energy = integral[:, -1, -1]       # [B]
+        B, W, H = power.shape
+        cumsum_h = torch.cumsum(power, dim=1)        # [B, W, H]
+        integral = torch.cumsum(cumsum_h, dim=2)     # [B, W, H]
+        total_energy = integral[:, -1, -1]           # [B]
         max_k = min(W, H)
+        cx, cy = W // 2, H // 2
 
-        ks = torch.arange(max_k, device=power_spectrum.device)
-        b_idx = torch.arange(B, device=power_spectrum.device).unsqueeze(1).expand(B, max_k)
-        k_idx = ks.unsqueeze(0).expand(B, max_k)
-        cum_energy_k = integral[b_idx, k_idx, k_idx]  # [B, max_k]
+        for fs in range(self.lcm, max_k + 1, self.lcm):
+            half = fs // 2
+            x0, y0 = cx - half, cy - half
+            x1, y1 = x0 + fs, y0 + fs
 
-        thresholds = total_energy.view(B, 1) * self.energy_ratio
-        meets = cum_energy_k >= thresholds
-        first_k = torch.where(
-            meets.any(dim=1),
-            meets.float().argmax(dim=1),
-            torch.tensor(max_k - 1, device=power_spectrum.device)
-        )  # [B]
-        sizes = first_k + 1
+            A = integral[:, x1-1, y1-1]
+            B_ = integral[:, x0-1, y1-1] if x0 > 0 else 0
+            C = integral[:, x1-1, y0-1] if y0 > 0 else 0
+            D = integral[:, x0-1, y0-1] if x0 > 0 and y0 > 0 else 0
+            low_energy = A - B_ - C + D  # [B]
+            if torch.all(low_energy / (total_energy + self.eps) >= self.energy_ratio):
+                return fs
 
-        return int(sizes.max().item())
+        return (max_k // self.lcm) * self.lcm or self.lcm
 
-    def forward(self, x: torch.Tensor) -> dict:
-        freq = torch.fft.fft2(x, norm='ortho')  # [B, 3, W, H],
-        freq = torch.fft.fftshift(freq, dim=(-2, -1))
+    def forward(self, x: torch.Tensor) -> Dict[str, Any]:
+        F = fft.fft2(x, norm='ortho')              # [B, 3, W, H]
+        real, imag = F.real, F.imag
 
-        real = freq.real  # [B, 3, W, H]
-        imag = freq.imag  # [B, 3, W, H]
+        fs = self.filter_size
+        if fs == 0:
+            power = real.pow(2) + imag.pow(2)      # [B, 3, W, H]
+            energy = power.sum(dim=1)              # [B, W, H]
+            fs = self.compute_filter_size(energy)
 
-        # freq_cat = torch.cat([real, imag], dim=1)  # [B, 6, W, H]
+        F = fft.fftshift(F, dim=(-2, -1))
+        real, imag = F.real, F.imag
 
-        log_real = torch.sign(real) * torch.log1p(abs(real) + self.eps)
-        log_imag = torch.sign(imag) * torch.log1p(abs(imag) + self.eps)
-
+        signed_log = lambda v: torch.sign(v) * torch.log1p(v.abs() + self.eps)
+        log_real = signed_log(real)
+        log_imag = signed_log(imag)
         freq_cat = torch.cat([log_real, log_imag], dim=1)  # [B, 6, W, H]
 
         B, C, W, H = freq_cat.shape
-
-        filter_size = self.filter_size
-        if filter_size == 0:
-            power_spectrum = real.pow(2) + real.pow(2)
-            energy = power_spectrum.sum(dim=1)
-            filter_size = self.compute_filter_size(energy)
-
+        half = fs // 2
         cx, cy = W // 2, H // 2
-        half = filter_size // 2
-        x_start, y_start = cx - half, cy - half
-        x_end, y_end = cx + half, cy + half
+        x0, y0 = cx - half, cy - half
+        low_freq = freq_cat[:, :, x0:x0 + fs, y0:y0 + fs]
 
-        low_freq = freq_cat[:, :, x_start:x_end, y_start:y_end]  # [B, 6, fs, fs]
-
-        return {"tensor": low_freq, "filter_size": filter_size}
+        return {"tensor": low_freq, "filter_size": fs}
 
 
 class MFFTTokenizer(nn.Module):
     def __init__(
-            self,
-            in_channels: int = 3,
-            pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
-            embedding_dim: int = 768,
-            filter_size: int = 128,
-            energy_ratio: float = 0.900
+        self,
+        in_channels: int = 3,
+        pixel_unshuffle_scale_factors: List[int] = [2, 2, 2, 2],
+        embedding_dim: int = 768,
+        filter_size: int = 0,
+        energy_ratio: float = 0.9
     ):
         super().__init__()
-
-        self.low_freq_filter = FFTLowFreqFilter(filter_size=filter_size, energy_ratio=energy_ratio)
-
+        # Pass downscale factors to filter for LCM-based iteration
+        self.low_freq_filter = FFTLowFreqFilter(
+            filter_size=filter_size,
+            energy_ratio=energy_ratio,
+            downscale_factors=pixel_unshuffle_scale_factors
+        )
         self.in_channels = in_channels
         self.pixel_unshuffle_scale_factors = pixel_unshuffle_scale_factors
         self.embedding_dim = embedding_dim
 
-        feature_extractor_layers = nn.ModuleList()
-        current_channels = self.in_channels * 2
+        layers = []
+        current_channels = in_channels * 2
         for scale in self.pixel_unshuffle_scale_factors:
-            feature_extractor_layers.append(
-                nn.Conv2d(
-                    in_channels=current_channels,
-                    out_channels=current_channels,
-                    kernel_size=3, padding=1, stride=1
-                )
-            )
-            feature_extractor_layers.append(nn.BatchNorm2d(current_channels))
-            feature_extractor_layers.append(nn.LeakyReLU())
-            feature_extractor_layers.append(nn.PixelUnshuffle(downscale_factor=scale))
-            current_channels = current_channels * (scale ** 2)
-
-        self.feature_extractor = nn.Sequential(*feature_extractor_layers)
+            layers += [
+                nn.Conv2d(current_channels, current_channels, kernel_size=3, padding=1),
+                nn.BatchNorm2d(current_channels),
+                nn.LeakyReLU(),
+                nn.PixelUnshuffle(downscale_factor=scale)
+            ]
+            current_channels *= scale ** 2
+        self.feature_extractor = nn.Sequential(*layers)
 
         self.projection = nn.Conv2d(
-            in_channels=current_channels,
-            out_channels=current_channels,
-            kernel_size=1, stride=1, padding=0, bias=False
+            current_channels, current_channels, kernel_size=1, bias=False
         )
-
-        self.linear_projection = nn.Linear(
-            in_features=current_channels,
-            out_features=embedding_dim
-        )
-
+        self.linear_projection = nn.Linear(current_channels, embedding_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
-    def _add_cls_token(self, tokens):
-        batch_size = tokens.shape[0]
-        cls_token = self.cls_token.expand(batch_size, -1, -1)
-        tokens = torch.cat([cls_token, tokens], dim=1)
-        return tokens
+    def _add_cls_token(self, tokens: torch.Tensor) -> torch.Tensor:
+        cls = self.cls_token.to(tokens.device).expand(tokens.size(0), -1, -1)
+        return torch.cat([cls, tokens], dim=1)
 
-    def _add_positional_encoding(self, tokens):
-        positional_encoding = self.positional_encoding(tokens)
-        tokens = tokens + positional_encoding
-        return tokens
+    def _add_positional_encoding(self, tokens: torch.Tensor) -> torch.Tensor:
+        return tokens + self.positional_encoding(tokens)
 
-    def forward(self, x) -> dict:
-        low_freq_output = self.low_freq_filter(x)  # [B, 6, fs, fs]
+    def forward(self, x: torch.Tensor) -> Dict[str, Any]:
+        low = self.low_freq_filter(x)
+        low_x, fs = low["tensor"], low["filter_size"]
 
+        feat = self.feature_extractor(low_x)
+        feat = self.projection(feat)
+        feat = feat.permute(0, 2, 3, 1).contiguous()
 
-
-        low_freq_x = low_freq_output["tensor"]
-        filter_size = low_freq_output["filter_size"]
-
-        features = self.feature_extractor(low_freq_x)  # [B, 6 * (4**N), fs / (2**N), fs / (2**N)]
-        features = self.projection(features)  # [B, 6 * (4**N), fs / (2**N), fs / (2**N)]
-        features = features.permute(0, 2, 3, 1).contiguous()  # [B, fs / (2**N), fs / (2**N), 6 * (4**N)]
-
-        B, H, W, C = features.shape
-        raw_tokens = torch.reshape(features, (B, H * W, C))
-
-        tokens = self.linear_projection(raw_tokens)
+        B, H, W, C = feat.shape
+        tokens = feat.view(B, H * W, C)
+        tokens = self.linear_projection(tokens)
         tokens = self._add_cls_token(tokens)
         tokens = self._add_positional_encoding(tokens)
 
-        return {"tokens": tokens, "filter_size": filter_size}
+        return {"tokens": tokens, "filter_size": fs}
