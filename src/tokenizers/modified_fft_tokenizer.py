@@ -14,7 +14,7 @@ class FFTLowFreqFilter(nn.Module):
         Tensor of shape [B, 6, filter_size, filter_size] containing real and imaginary
         parts of the low-frequency region for each channel.
     """
-    def __init__(self, filter_size: int = 0, energy_ratio: float = 0.900):
+    def __init__(self, filter_size: int = 128, energy_ratio: float = 0.900):
         super().__init__()
         self.filter_size = filter_size
         self.energy_ratio = energy_ratio
@@ -89,7 +89,7 @@ class MFFTTokenizer(nn.Module):
             in_channels: int = 3,
             pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
             embedding_dim: int = 768,
-            filter_size: int = 0,
+            filter_size: int = 128,
             energy_ratio: float = 0.900
     ):
         super().__init__()
@@ -149,4 +149,3 @@ class MFFTTokenizer(nn.Module):
         tokens = self._add_positional_encoding(tokens)
 
         return {"tokens": tokens, "filter_size": filter_size}
-    
