@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.fft as fft
@@ -7,9 +9,6 @@ from functools import reduce
 
 from src.tokenizers.positional_encoding import PositionalEncoding
 
-
-def _lcm_list(numbers: List[int]) -> int:
-    return reduce(lambda a, b: a * b // gcd(a, b), numbers, 1)
 
 class FFTLowFreqFilter(nn.Module):
     """
@@ -35,9 +34,9 @@ class FFTLowFreqFilter(nn.Module):
         self.energy_ratio = energy_ratio
 
         self.downscale_factors = downscale_factors or []
-        self.lcm = _lcm_list(self.downscale_factors) if self.downscale_factors else 1
-
+        self.total_downscale = math.prod(self.downscale_factors)
         self.eps = eps
+
 
     def compute_filter_size(self, power: torch.Tensor) -> int:
         """
@@ -53,7 +52,7 @@ class FFTLowFreqFilter(nn.Module):
         max_k = min(W, H)
         cx, cy = W // 2, H // 2
 
-        for fs in range(self.lcm, max_k + 1, self.lcm):
+        for fs in range(self.total_downscale, max_k + 1, self.total_downscale):
             half = fs // 2
             x0, y0 = cx - half, cy - half
             x1, y1 = x0 + fs, y0 + fs
@@ -66,24 +65,23 @@ class FFTLowFreqFilter(nn.Module):
             if torch.all(low_energy / (total_energy + self.eps) >= self.energy_ratio):
                 return fs
 
-        return (max_k // self.lcm) * self.lcm or self.lcm
+        return (max_k // self.total_downscale) * self.total_downscale or self.total_downscale
 
     def forward(self, x: torch.Tensor) -> Dict[str, Any]:
         F = fft.fft2(x, norm='ortho')              # [B, 3, W, H]
-        real, imag = F.real, F.imag
-
-        fs = self.filter_size
-        if fs == 0:
-            power = real.pow(2) + imag.pow(2)      # [B, 3, W, H]
-            energy = power.sum(dim=1)              # [B, W, H]
-            fs = self.compute_filter_size(energy)
-
         F = fft.fftshift(F, dim=(-2, -1))
         real, imag = F.real, F.imag
 
         signed_log = lambda v: torch.sign(v) * torch.log1p(v.abs() + self.eps)
         log_real = signed_log(real)
         log_imag = signed_log(imag)
+
+        fs = self.filter_size
+        if fs == 0:
+            power_spectrum = log_real.pow(2) + log_imag.pow(2)      # [B, 3, W, H]
+            energy = power_spectrum.sum(dim=1)              # [B, W, H]
+            fs = self.compute_filter_size(energy)
+
         freq_cat = torch.cat([log_real, log_imag], dim=1)  # [B, 6, W, H]
 
         B, C, W, H = freq_cat.shape
