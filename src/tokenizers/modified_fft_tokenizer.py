@@ -131,6 +131,17 @@ class MFFTTokenizer(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
         self.positional_encoding = PositionalEncoding(embedding_dim)
 
+    def _add_cls_token(self, tokens):
+        batch_size = tokens.shape[0]
+        cls_token = self.cls_token.expand(batch_size, -1, -1)
+        tokens = torch.cat([cls_token, tokens], dim=1)
+        return tokens
+
+    def _add_positional_encoding(self, tokens):
+        positional_encoding = self.positional_encoding(tokens)
+        tokens = tokens + positional_encoding
+        return tokens
+
     def forward(self, x) -> dict:
         low_freq_output = self.low_freq_filter(x)  # [B, 6, fs, fs]
 
