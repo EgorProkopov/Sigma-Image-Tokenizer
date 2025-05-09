@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from src.tokenizers.positional_encoding import PositionalEncoding
+
 
 class FFTLowFreqFilter(nn.Module):
     """
@@ -51,7 +53,7 @@ class FFTLowFreqFilter(nn.Module):
 
         return int(sizes.max().item())
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> dict:
         freq = torch.fft.fft2(x, norm='ortho')  # [B, 3, W, H],
 
         real = freq.real  # [B, 3, W, H]
@@ -78,8 +80,73 @@ class FFTLowFreqFilter(nn.Module):
 
         low_freq = freq_cat[:, :, x_start:x_end, y_start:y_end]  # [B, 6, fs, fs]
 
-        return low_freq
+        return {"tensor": low_freq, "filter_size": filter_size}
 
 
+class MFFTTokenizer(nn.Module):
+    def __init__(
+            self,
+            in_channels: int = 3,
+            pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
+            embedding_dim: int = 768,
+            filter_size: int = 0,
+            energy_ratio: float = 0.900
+    ):
+        super().__init__()
 
+        self.low_freq_filter = FFTLowFreqFilter(filter_size=filter_size, energy_ratio=energy_ratio)
 
+        self.in_channels = in_channels
+        self.pixel_unshuffle_scale_factors = pixel_unshuffle_scale_factors
+        self.embedding_dim = embedding_dim
+
+        feature_extractor_layers = nn.ModuleList()
+        current_channels = self.in_channels * 2
+        for scale in self.pixel_unshuffle_scale_factors:
+            feature_extractor_layers.append(
+                nn.Conv2d(
+                    in_channels=current_channels,
+                    out_channels=current_channels,
+                    kernel_size=3, padding=1, stride=1
+                )
+            )
+            feature_extractor_layers.append(nn.BatchNorm2d(current_channels))
+            feature_extractor_layers.append(nn.LeakyReLU())
+            feature_extractor_layers.append(nn.PixelUnshuffle(downscale_factor=scale))
+            current_channels = current_channels * (scale ** 2)
+
+        self.feature_extractor = nn.Sequential(*feature_extractor_layers)
+
+        self.projection = nn.Conv2d(
+            in_channels=current_channels,
+            out_channels=current_channels,
+            kernel_size=1, stride=1, padding=0, bias=False
+        )
+
+        self.linear_projection = nn.Linear(
+            in_features=current_channels,
+            out_features=embedding_dim
+        )
+
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
+        self.positional_encoding = PositionalEncoding(embedding_dim)
+
+    def forward(self, x) -> dict:
+        low_freq_output = self.low_freq_filter(x)  # [B, 6, fs, fs]
+
+        low_freq_x = low_freq_output["tensor"]
+        filter_size = low_freq_output["filter_size"]
+
+        features = self.feature_extractor(low_freq_x)  # [B, 6 * (4**N), fs / (2**N), fs / (2**N)]
+        features = self.projection(features)  # [B, 6 * (4**N), fs / (2**N), fs / (2**N)]
+        features = features.permute(0, 2, 3, 1).contiguous()  # [B, fs / (2**N), fs / (2**N), 6 * (4**N)]
+
+        B, H, W, C = features.shape
+        raw_tokens = torch.reshape(features, (B, H * W, C))
+
+        tokens = self.linear_projection(raw_tokens)
+        tokens = self._add_cls_token(tokens)
+        tokens = self._add_positional_encoding(tokens)
+
+        return {"tokens": tokens, "filter_size": filter_size}
+    

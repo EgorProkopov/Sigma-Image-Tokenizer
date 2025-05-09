@@ -197,10 +197,12 @@ class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
         dispersion: float = None,
     ):
         super().__init__(in_channels, pixel_unshuffle_scale_factors, dispersion, embedding_dim)
+
         modes = {"full", "top-k", "dispersion"}
         assert selection_mode in modes, f"selection_mode must be one of {modes}"
         if selection_mode == "top-k":
             assert top_k is not None and top_k > 0, "top-k value must be positive"
+
         self.selection_mode = selection_mode
         self.top_k = top_k
 
