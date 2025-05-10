@@ -130,6 +130,7 @@ class ViTLightingModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
 
 class SVDLinearViTLightingModule(CustomLightningModule):
@@ -145,6 +146,7 @@ class SVDLinearViTLightingModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
 
 class SVDSquareViTLightingModule(CustomLightningModule):
@@ -160,6 +162,7 @@ class SVDSquareViTLightingModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
 
 class FFTViTLightingModule(CustomLightningModule):
@@ -176,6 +179,7 @@ class FFTViTLightingModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
 
 class MSVDNoScorerViTLightingModule(CustomLightningModule):
@@ -192,6 +196,7 @@ class MSVDNoScorerViTLightingModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
 
 class MSVDSigmoidGatingViTLightningModule(CustomLightningModule):
@@ -213,6 +218,8 @@ class MSVDSigmoidGatingViTLightningModule(CustomLightningModule):
 
         self.alpha = model_hparams["alpha"]
         self.gated_loss = GatedLoss()
+
+        self.save_hyperparameters()
 
     def forward(self, x):
         msvd_output = self.model(x)
@@ -304,6 +311,7 @@ class MFFTViTLightningModule(CustomLightningModule):
             n_classes=model_hparams["n_classes"]
         )
         super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
 
     def forward(self, x):
         mfft_output = self.model(x)
