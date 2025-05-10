@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 import torch.fft as fft
 from typing import Optional, List, Dict, Any
-from math import gcd
-from functools import reduce
 
 from src.tokenizers.positional_encoding import PositionalEncoding
 
@@ -40,10 +38,10 @@ class FFTLowFreqFilter(nn.Module):
 
     def compute_filter_size(self, power: torch.Tensor) -> int:
         """
-        Compute minimal filter_size, iterating by LCM, such that
+        Compute minimal filter_size, such that
         sum of power[..., :fs, :fs] >= energy_ratio * total_energy
         power: [B, W, H]
-        Returns: filter_size (int, multiple of LCM)
+        Returns: filter_size
         """
         B, W, H = power.shape
         cumsum_h = torch.cumsum(power, dim=1)        # [B, W, H]
@@ -103,7 +101,7 @@ class MFFTTokenizer(nn.Module):
         energy_ratio: float = 0.9
     ):
         super().__init__()
-        # Pass downscale factors to filter for LCM-based iteration
+
         self.low_freq_filter = FFTLowFreqFilter(
             filter_size=filter_size,
             energy_ratio=energy_ratio,

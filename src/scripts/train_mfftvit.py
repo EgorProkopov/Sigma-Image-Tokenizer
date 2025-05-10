@@ -16,12 +16,14 @@ def main():
     criterion = torch.nn.CrossEntropyLoss()
     model = MFFTViTLightningModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=config["logging"]["logging_step"])
 
+    image_size = 256
+
     transform = transforms.Compose([
         transforms.Resize((
-            int(model_hparams["image_size"] * 1.25),
-            int(model_hparams["image_size"] * 1.25)
+            int(image_size * 1.25),
+            int(image_size * 1.25)
         )),
-        transforms.RandomCrop(model_hparams["image_size"]),
+        transforms.RandomCrop(image_size),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         # transforms.Normalize(
