@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pad_sequence
 
 from src.tokenizers.positional_encoding import PositionalEncoding
 
@@ -194,65 +195,80 @@ class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
         embedding_dim: int = 768,
         selection_mode: str = "full",
         top_k: int = None,
-        dispersion: float = None,
+        dispersion: float = 0.9,
     ):
         super().__init__(in_channels, pixel_unshuffle_scale_factors, dispersion, embedding_dim)
-
         modes = {"full", "top-k", "dispersion"}
         assert selection_mode in modes, f"selection_mode must be one of {modes}"
         if selection_mode == "top-k":
             assert top_k is not None and top_k > 0, "top-k value must be positive"
-
+        if selection_mode == "dispersion":
+            assert 0 < dispersion <= 1.0, "dispersion must be in (0, 1]"
         self.selection_mode = selection_mode
         self.top_k = top_k
 
         self.mlp_scorer = nn.Sequential(
-            nn.Linear(
-                in_features=embedding_dim,
-                out_features=128,
-            ),
+            nn.Linear(embedding_dim, 128),
             nn.InstanceNorm1d(128),
             nn.LeakyReLU(),
-            nn.Linear(
-                in_features=128, out_features=1
-            ),
-            # nn.ReLU()
+            nn.Linear(128, 1)
         )
 
-    def _filter_tokens(self, tokens: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
-        gates = torch.sigmoid(scores)              # [B, N]
-        gated = tokens * gates.unsqueeze(-1)       # [B, N, E]
-        B, N, E = tokens.shape
+    def _get_filter_mask(self, scores: torch.Tensor) -> torch.Tensor:
+        B, N = scores.shape
+        gates = torch.sigmoid(scores)  # [B, N]
 
         if self.training or self.selection_mode == "full":
-            return gated
+            return torch.ones_like(gates, dtype=torch.bool)
 
         if self.selection_mode == "top-k":
             k = min(self.top_k, N)
-            idx = scores.topk(k, dim=1).indices    # [B, k]
-            mask = torch.zeros_like(scores)
-            mask.scatter_(1, idx, 1.0)
-            return tokens * mask.unsqueeze(-1)
+            idx = scores.topk(k, dim=1).indices  # [B, k]
+            mask = torch.zeros_like(gates, dtype=torch.bool)
+            mask.scatter_(1, idx, True)
+            return mask
 
         gates_sorted, idx_sorted = gates.sort(dim=1, descending=True)  # [B, N]
-        cumsum = gates_sorted.cumsum(dim=1)                                # [B, N]
+        cumsum = gates_sorted.cumsum(dim=1)                              # [B, N]
         total = gates_sorted.sum(dim=1, keepdim=True)                   # [B, 1]
         thresh = self.dispersion * total                                # [B, 1]
-        keep_sorted = cumsum <= thresh                                    # [B, N]
-        mask = torch.zeros_like(gates)
-        mask.scatter_(1, idx_sorted, keep_sorted.float())              # [B, N]
-        return tokens * mask.unsqueeze(-1)
+        keep_sorted = cumsum <= thresh                                  # [B, N]
+        mask = torch.zeros_like(gates, dtype=torch.bool)
+        mask.scatter_(1, idx_sorted, keep_sorted)
+        return mask  # [B, N]
 
     def forward(self, x: torch.Tensor):
-        raw_tokens = self._get_raw_tokens(x)           # [B, N, C]
-        tokens = self.linear_projection(raw_tokens)    # [B, N, E]
+        raw_tokens = self._get_raw_tokens(x)            # [B, N, C]
+        tokens = self.linear_projection(raw_tokens)     # [B, N, E]
 
-        scores = self.mlp_scorer(tokens).squeeze(-1)   # [B, N]
+        scores = self.mlp_scorer(tokens).squeeze(-1)    # [B, N]
 
-        filtered = self._filter_tokens(tokens, scores) # [B, N, E]
+        gated = tokens * torch.sigmoid(scores).unsqueeze(-1)  # [B, N, E]
 
-        out = self._add_cls_token(filtered)            # [B, N+1, E]
-        out = self._add_positional_encoding(out)
+        B, N, E = gated.shape
+        cls_tokens = self.cls_token.expand(B, 1, E)    # [B, 1, E]
+        gated_with_cls = torch.cat([cls_tokens, gated], dim=1)  # [B, N+1, E]
 
-        return {"tokens": out, "scores": scores}
+        seq_pe = self._add_positional_encoding(gated_with_cls)
 
+        mask = self._get_filter_mask(scores)               # [B, N]
+        mask_with_cls = torch.cat([
+            torch.ones((B, 1), dtype=torch.bool, device=mask.device),
+            mask
+        ], dim=1)
+
+        filtered_list = [seq_pe[b][mask_with_cls[b]] for b in range(B)]  # list of [M_b, E]
+        padded_tokens = pad_sequence(filtered_list, batch_first=True)  # [B, M_max, E]
+
+        return {"tokens": padded_tokens, "scores": scores}
+
+        # mask_with_cls = torch.cat([
+        #     torch.ones(B, 1, dtype=torch.bool, device=scores.device),
+        #     mask
+        # ], dim=1)  # [B, N+1]
+        #
+        # filtered_tokens = []
+        # for b in range(B):
+        #     filtered_tokens.append(gated_with_cls[b][mask_with_cls[b]])  # [(M_b+1), E]
+        #
+        # return {"tokens": filtered_tokens, "scores": scores, "mask": mask_with_cls}

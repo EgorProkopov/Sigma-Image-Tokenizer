@@ -84,5 +84,4 @@ def test_model(
     )
 
     results = trainer.validate(model, val_loader, verbose=True)
-    print("Validation metrics:", results)
     return results
