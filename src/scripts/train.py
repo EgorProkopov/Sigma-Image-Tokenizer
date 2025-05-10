@@ -1,10 +1,20 @@
+from omegaconf import DictConfig
+
 import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
+import torchvision
 from torchvision import datasets
 
 
-def train_model(model, config, transform):
+from src.models.lightning_modules import CustomLightningModule
+
+
+def train_model(
+        model: CustomLightningModule,
+        config: DictConfig,
+        transform: torchvision.transforms.transforms.Compose
+):
     model_hparams = config["model_hparams"]
     train_hparams = config["train_hparams"]
 
@@ -42,3 +52,37 @@ def train_model(model, config, transform):
     )
 
     trainer.fit(model, train_loader, val_loader)
+
+
+def test_model(
+        model: CustomLightningModule,
+        config: DictConfig,
+        transform: torchvision.transforms.transforms.Compose
+):
+    model_hparams = config["model_hparams"]
+    train_hparams = config["train_hparams"]
+
+    val_dataset = datasets.ImageFolder(
+        r"F:\research\data\intel_multiclass\seg_test",
+        transform=transform
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=train_hparams["val_batch_size"],
+        shuffle=False,
+        num_workers=train_hparams["num_workers"]
+    )
+
+    if train_hparams.get("accelerator") == "cuda":
+        torch.set_float32_matmul_precision('high')
+
+    trainer = pl.Trainer(
+        accelerator=train_hparams.get("accelerator", "cpu"),
+        devices=1,
+        logger=False,
+        enable_checkpointing=False
+    )
+
+    results = trainer.validate(model, val_loader, verbose=True)
+    print("Validation metrics:", results)
+    return results
