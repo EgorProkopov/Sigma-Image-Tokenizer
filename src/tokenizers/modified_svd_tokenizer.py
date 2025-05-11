@@ -261,14 +261,3 @@ class MSVDSigmoidGatingTokenizer(MSVDNoScorerTokenizer):
         padded_tokens = pad_sequence(filtered_list, batch_first=True)  # [B, M_max, E]
 
         return {"tokens": padded_tokens, "scores": scores}
-
-        # mask_with_cls = torch.cat([
-        #     torch.ones(B, 1, dtype=torch.bool, device=scores.device),
-        #     mask
-        # ], dim=1)  # [B, N+1]
-        #
-        # filtered_tokens = []
-        # for b in range(B):
-        #     filtered_tokens.append(gated_with_cls[b][mask_with_cls[b]])  # [(M_b+1), E]
-        #
-        # return {"tokens": filtered_tokens, "scores": scores, "mask": mask_with_cls}
