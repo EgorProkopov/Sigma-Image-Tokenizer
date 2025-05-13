@@ -1,12 +1,10 @@
 from omegaconf import OmegaConf
-import lightning.pytorch as pl
 import torch
 import torchvision.transforms as transforms
 
 from src.models.lightning_modules import MSVDSigmoidGatingViTLightningModule
-from src.models.losses import GatedLoss
 from src.utils import set_seed
-from src.scripts.train import test_model
+from src.scripts.classification.train import test_model
 
 def main():
     set_seed(239)

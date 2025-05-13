@@ -2,26 +2,24 @@ import torch
 import torchvision.transforms as transforms
 from omegaconf import OmegaConf
 
-from src.models.lightning_modules import MSVDSigmoidGatingViTLightningModule
+from src.models.lightning_modules import SVDLinearViTLightingModule
 from src.utils import set_seed
-from src.scripts.train import train_model
+from src.scripts.classification.train import train_model
 
 def main():
     set_seed(239)
-    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\msvdvit_sigmoid_gating.yaml")
+    config = OmegaConf.load(r"/configs/svd_lin_vit_train.yaml")
     model_hparams = config["model_hparams"]
 
     criterion = torch.nn.CrossEntropyLoss()
-    model = MSVDSigmoidGatingViTLightningModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=config["logging"]["logging_step"])
-
-    image_size = 256
+    model = SVDLinearViTLightingModule(model_hparams, criterion, lr=config["train_hparams"]["lr"], log_step=config["logging"]["logging_step"])
 
     transform = transforms.Compose([
         transforms.Resize((
-            int(image_size * 1.25),
-            int(image_size * 1.25)
+            int(model_hparams["image_size"] * 1.25),
+            int(model_hparams["image_size"] * 1.25)
         )),
-        transforms.RandomCrop(image_size),
+        transforms.RandomCrop(model_hparams["image_size"]),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(
