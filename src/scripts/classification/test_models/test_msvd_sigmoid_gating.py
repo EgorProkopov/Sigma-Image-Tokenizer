@@ -9,7 +9,7 @@ from src.scripts.classification.train import test_model
 def main():
     set_seed(239)
 
-    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\msvdvit_sigmoid_gating.yaml")
+    config = OmegaConf.load(r"/configs/msvdvit_sigmoid_gating.yaml")
 
     model = MSVDSigmoidGatingViTLightningModule(
         config.model_hparams,
