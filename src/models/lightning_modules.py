@@ -3,7 +3,7 @@ import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 from src.models.losses import GatedLoss
-from src.models.transformer import VisionTransformer, MFFTViT
+from src.models.transformer import VisionTransformer, MFFTViT, WaveletViT
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
 from src.models.transformer import MSVDNoScorerViT, MSVDSigmoidGatingViT
@@ -381,3 +381,21 @@ class MFFTViTLightningModule(CustomLightningModule):
         self.log("val_loss", loss, prog_bar=False)
         self.log("val_filter_size", filter_size, prog_bar=True)
         return loss
+
+
+class WaveletViTLightningModule(CustomLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = WaveletViT(
+            wavelet=model_hparams["wavelet"],
+            bit_planes=model_hparams["bit_planes"],
+            final_threshold=model_hparams["final_threshold"],
+            embedding_dim=model_hparams["embedding_dim"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+            n_classes=model_hparams["n_classes"],
+            max_seq_len=model_hparams["max_seq_len"]
+        )
+        super().__init__(model, criterion, lr, n_classes=model_hparams["n_classes"], log_step=log_step)
+        self.save_hyperparameters()
