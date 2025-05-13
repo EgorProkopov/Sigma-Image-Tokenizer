@@ -33,13 +33,15 @@ def train_model(
         train_dataset,
         batch_size=train_hparams["train_batch_size"],
         shuffle=True,
-        num_workers=train_hparams["num_workers"]
+        num_workers=train_hparams["num_workers"],
+        persistent_workers=True
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=train_hparams["val_batch_size"],
         shuffle=False,
-        num_workers=train_hparams["num_workers"]
+        num_workers=train_hparams["num_workers"],
+        persistent_workers=True
     )
 
     if train_hparams.get("accelerator") == "cuda":

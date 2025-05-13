@@ -8,18 +8,17 @@ from src.models.decoder_modules import TransformerDecoder
 
 class ViTTransformerDecoder(nn.Module):
     def __init__(
-            self,
-            image_size: int = 224,
-            patch_size: int = 16,
-            in_channels: int = 3,
-            embedding_dim: int = 768,
-            qkv_dim: int = 64,
-            mlp_hidden_size: int = 1024,
-            n_layers: int = 12,
-            n_heads: int = 12
+        self,
+        image_size: int = 224,
+        patch_size: int = 16,
+        in_channels: int = 3,
+        embedding_dim: int = 768,
+        qkv_dim: int = 64,
+        mlp_hidden_size: int = 1024,
+        n_layers: int = 12,
+        n_heads: int = 12
     ):
         super().__init__()
-
         self.image_size = image_size
         self.patch_size = patch_size
         self.in_channels = in_channels
@@ -31,7 +30,6 @@ class ViTTransformerDecoder(nn.Module):
             in_channels=in_channels,
             embed_dim=embedding_dim
         )
-
         self.transformer_decoder = TransformerDecoder(
             embed_dim=embedding_dim,
             qkv_dim=qkv_dim,
@@ -39,23 +37,28 @@ class ViTTransformerDecoder(nn.Module):
             n_layers=n_layers,
             n_heads=n_heads
         )
-
         self.detokenizer = ViTDetokenizer(
             patch_size=patch_size,
             out_channels=in_channels,
             embed_dim=embedding_dim
         )
 
-    def forward(self, x):
-        tokens = self.tokenizer(x)  # [B, P+1, E]
-
-        decoded = self.transformer_decoder(tokens)
-        decoded_data = decoded[:, :-1, :]
-        eoi_token = decoded[:, -1, :]
-
-        patches = self.detokenizer(decoded_data)
-
-        return {"patches": patches, "eoi_token": eoi_token}
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        """
+        Teacher-forcing forward:
+         - images: [B, C, H, W]
+         - returns recon: [B, C, H, W]
+        """
+        # 1) токенизируем
+        embeds = self.tokenizer(images)             # [B, P+1, E]
+        # 2) вход модели — все, кроме последнего эмбеддинга
+        inp = embeds[:, :-1, :]                     # [B, P, E]
+        # 3) декодируем
+        decoded = self.transformer_decoder(inp)     # [B, P, E]
+        # 4) реконструкция
+        patches = self.detokenizer(decoded)         # [B, P, C, ps, ps]
+        recon = self.detokenizer.reconstruct_image(patches)  # [B, C, H, W]
+        return recon
 
     @torch.no_grad()
     def generate_image(self, device: torch.device = None):

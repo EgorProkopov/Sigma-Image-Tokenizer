@@ -174,3 +174,4 @@ configs/vit_train.yaml
 configs/vit_train.yaml
 configs/svdvit_train.yaml
 /configs
+/src/scripts/generation/train/lightning_logs

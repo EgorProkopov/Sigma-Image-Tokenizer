@@ -1,6 +1,8 @@
 import os
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.utils import save_image
 import lightning.pytorch as pl
 
@@ -9,44 +11,35 @@ from src.models.decoder_transformer import ViTTransformerDecoder
 
 class CustomDecoderLightningModule(pl.LightningModule):
     def __init__(
-            self,
-            model,
-            criterion,
-            lr,
-            log_step=100
+        self,
+        model: nn.Module,
+        criterion: nn.Module,
+        lr: float,
+        num_generate: int = 2,
+        log_step: int = 100
     ):
         super().__init__()
-
         self.model = model
-        self.criterion = criterion
         self.lr = lr
+        self.num_generate = num_generate
         self.log_step = log_step
 
-        self.num_generate = 2
+        self.criterion = criterion
 
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        images, _ = batch
-
-        outputs = self.forward(images)
-        predicted_patches = outputs["patches"]
-        predicted_images = self.model.detokenizer.reconstruct_image(predicted_patches)
-        loss = self.criterion(predicted_images, images)
-
+        images, _ = batch                              # [B, C, H, W]
+        recon = self.forward(images)                   # [B, C, H, W]
+        loss = self.criterion(recon, images)           # nn.MSELoss
         self.log("train_loss", loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         images, _ = batch
-
-        outputs = self.forward(images)
-        predicted_patches = outputs["patches"]
-        predicted_images = self.model.detokenizer.reconstruct_image(predicted_patches)
-
-        loss = self.criterion(predicted_images, images)
-
+        recon = self.forward(images)
+        loss = self.criterion(recon, images)
         self.log("val_loss", loss, prog_bar=False)
         return loss
 
@@ -57,18 +50,14 @@ class CustomDecoderLightningModule(pl.LightningModule):
 
         for img_idx in range(self.num_generate):
             images_seq = self.model.generate_image(device=self.device)
-            final_img = images_seq[-1]  # Tensor [C, H, W]
-
-            img_min, img_max = final_img.min(), final_img.max()
-            img_norm = (final_img - img_min) / (img_max - img_min + 1e-8)
-
+            final_img = images_seq[-1]             # [C, H, W]
+            mn, mx = final_img.min(), final_img.max()
+            img_norm = (final_img - mn) / (mx - mn + 1e-8)
             fname = f"epoch{self.current_epoch}_img{img_idx}.png"
-            path = os.path.join(save_dir, fname)
-            save_image(img_norm, path)
+            save_image(img_norm, os.path.join(save_dir, fname))
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
 
 class ViTDecoderLightningModule(CustomDecoderLightningModule):
