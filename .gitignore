@@ -175,3 +175,5 @@ configs/vit_train.yaml
 configs/svdvit_train.yaml
 /configs
 /src/scripts/generation/train/lightning_logs
+src/.DS_Store
+/src/scripts/lightning_logs
