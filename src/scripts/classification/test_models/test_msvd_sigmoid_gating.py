@@ -9,7 +9,7 @@ from src.scripts.classification.train import test_model
 def main():
     set_seed(239)
 
-    config = OmegaConf.load(r"/configs/msvdvit_sigmoid_gating.yaml")
+    config = OmegaConf.load(r"F:\research\Sigma-Image-Tokenizer\configs\msvdvit_sigmoid_gating.yaml")
 
     model = MSVDSigmoidGatingViTLightningModule(
         config.model_hparams,
@@ -18,7 +18,7 @@ def main():
         log_step=config.logging.logging_step
     )
 
-    ckpt_path = r"F:\research\Sigma-Image-Tokenizer\src\scripts\lightning_logs\msvdvit_sigmoid_gating_00005\checkpoints\epoch=19-step=23400.ckpt"
+    ckpt_path = r"F:\research\Sigma-Image-Tokenizer\src\scripts\classification\lightning_logs\msvdvit_sigmoid_gating_00005\checkpoints\epoch=19-step=23400.ckpt"
     ckpt = torch.load(ckpt_path, map_location="cpu")
     orig_sd = ckpt.get("state_dict", ckpt)
 

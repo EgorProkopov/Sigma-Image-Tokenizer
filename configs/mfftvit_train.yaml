@@ -7,8 +7,8 @@ model_hparams:
   num_channels: 3
   pixel_unshuffle_scale_factors: [2, 2, 2, 2]
   embedding_dim: 768
-  filter_size: 128
-  energy_ratio: 0.900
+  filter_size: 0
+  energy_ratio: 0.990
   qkv_dim: 64
   mlp_hidden_size: 3072
   n_layers: 12
