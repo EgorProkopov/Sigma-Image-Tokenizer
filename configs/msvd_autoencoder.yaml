@@ -1,0 +1,21 @@
+model_hparams:
+  in_channels: 3
+  out_channels: 3
+  pixel_unshuffle_scale_factors: [2, 2, 2, 2]
+  pixel_shuffle_scale_factors: [2, 2, 2, 2]
+  embedding_dim: 768
+  selection_mode: "full"
+  top_k: 1
+  dispersion: 0.990
+
+train_hparams:
+    lr: 1e-4
+    alpha: 1.0
+    train_batch_size: 12
+    val_batch_size: 12
+    num_workers: 6
+    max_epoch: 20
+    accelerator: "cuda"
+
+logging:
+  logging_step: 100
