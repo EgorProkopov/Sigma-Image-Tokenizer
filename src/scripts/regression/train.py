@@ -36,15 +36,15 @@ def train_model(
 
     train_loader = DataLoader(
         train_dataset,
-        # batch_size=train_hparams["train_batch_size"],
-        batch_size=24,
+        batch_size=train_hparams["train_batch_size"],
+        # batch_size=24,
         shuffle=True,
         num_workers=train_hparams["num_workers"]
     )
     val_loader = DataLoader(
         val_dataset,
-        # batch_size=train_hparams["train_batch_size"],
-        batch_size=24,
+        batch_size=train_hparams["train_batch_size"],
+        # batch_size=24,
         shuffle=False,
         num_workers=train_hparams["num_workers"]
     )

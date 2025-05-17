@@ -445,18 +445,28 @@ class MFFTViTRegressionLightningModule(CustomRegressionLightningModule):
         super().__init__(model, criterion, lr, log_step=log_step)
         self.save_hyperparameters()
 
-    def training_step(self, batch, batch_idx):
-        # images = batch["image"]
-        # labels = batch["label_encoded"]
+        self.train_loss_accum = 0.0
+        self.val_loss_accum = 0.0
 
+    def training_step(self, batch, batch_idx):
         images, labels = batch
         labels = labels.float()
 
         outputs = self.forward(images)
-        logits = outputs["logits"]
-        loss = self.criterion(logits, labels)
+        preds = outputs["logits"]
+        batch_size, _ = preds.shape
+        preds = torch.reshape(preds, (batch_size, ))
 
-        self.log("train_loss", loss, prog_bar=True)
+        print(f"preds: {preds.shape}, real: {labels.shape}")
+
+        loss = self.criterion(preds, labels)
+        self.train_loss_accum += loss.item()
+
+
+        if (batch_idx + 1) % self.log_step == 0:
+            avg_loss = self.train_loss_accum / self.log_step
+            self.log("train_loss", avg_loss, prog_bar=True)
+            self.train_loss_accum = 0.0
 
         return loss
 
@@ -467,9 +477,14 @@ class MFFTViTRegressionLightningModule(CustomRegressionLightningModule):
         outputs = self.forward(images)
         logits = outputs["logits"]
         loss = self.criterion(logits, labels)
+        self.val_loss_accum += loss.item()
 
+        if (batch_idx + 1) % self.log_step == 0:
+            avg_loss = self.val_loss_accum / self.log_step
+            self.log("val_loss", avg_loss, prog_bar=True)
+            self.val_loss_accum = 0.0
 
-        self.log("val_loss", loss, prog_bar=True)
+        return loss
 
 
 class WaveletViTLightningModule(CustomLightningModule):
