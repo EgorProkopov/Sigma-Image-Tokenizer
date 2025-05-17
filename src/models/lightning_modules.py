@@ -457,8 +457,6 @@ class MFFTViTRegressionLightningModule(CustomRegressionLightningModule):
         batch_size, _ = preds.shape
         preds = torch.reshape(preds, (batch_size, ))
 
-        print(f"preds: {preds.shape}, real: {labels.shape}")
-
         loss = self.criterion(preds, labels)
         self.train_loss_accum += loss.item()
 
@@ -475,8 +473,11 @@ class MFFTViTRegressionLightningModule(CustomRegressionLightningModule):
         labels = labels.float()
 
         outputs = self.forward(images)
-        logits = outputs["logits"]
-        loss = self.criterion(logits, labels)
+        preds = outputs["logits"]
+
+        batch_size, _ = preds.shape
+        preds = torch.reshape(preds, (batch_size,))
+        loss = self.criterion(preds, labels)
         self.val_loss_accum += loss.item()
 
         if (batch_idx + 1) % self.log_step == 0:
