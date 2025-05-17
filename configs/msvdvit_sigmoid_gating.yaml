@@ -21,8 +21,8 @@ model_hparams:
 train_hparams:
     lr: 1e-4
     alpha: 1.0
-    train_batch_size: 12
-    val_batch_size: 12
+    train_batch_size: 24
+    val_batch_size: 24
     num_workers: 6
     max_epoch: 20
     accelerator: "cuda"

@@ -3,7 +3,8 @@ import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 from src.models.losses import GatedLoss
-from src.models.transformer import VisionTransformer, MFFTViT, WaveletViT, MFFTViTRegression
+from src.models.transformer import VisionTransformer, MFFTViT, WaveletViT, MFFTViTRegression, \
+    MSVDSigmoidGatingViTRegression
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
 from src.models.transformer import MSVDNoScorerViT, MSVDSigmoidGatingViT
@@ -339,6 +340,65 @@ class MSVDSigmoidGatingViTLightningModule(CustomLightningModule):
         self.val_f1.update(preds, labels)
 
         self.log("val_loss", loss, prog_bar=False)
+        return loss
+
+
+class MSVDSigmoidGatingViTRegressionLightningModule(CustomRegressionLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = MSVDSigmoidGatingViTRegression(
+            num_channels=model_hparams["num_channels"],
+            pixel_unshuffle_scale_factors=model_hparams["pixel_unshuffle_scale_factors"],
+            embedding_dim=model_hparams["embedding_dim"],
+            selection_mode=model_hparams["selection_mode"],
+            top_k=model_hparams["top_k"],
+            dispersion=model_hparams["dispersion"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+        )
+        super().__init__(model, criterion, lr, log_step=log_step)
+        self.save_hyperparameters()
+
+        self.train_loss_accum = 0.0
+        self.val_loss_accum = 0.0
+
+    def training_step(self, batch, batch_idx):
+        images, labels = batch
+        labels = labels.float()
+
+        outputs = self.forward(images)
+        preds = outputs["logits"]
+        batch_size, _ = preds.shape
+        preds = torch.reshape(preds, (batch_size, ))
+
+        loss = self.criterion(preds, labels)
+        self.train_loss_accum += loss.item()
+
+        if (batch_idx + 1) % self.log_step == 0:
+            avg_loss = self.train_loss_accum / self.log_step
+            self.log("train_loss", avg_loss, prog_bar=True)
+            self.train_loss_accum = 0.0
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        images, labels = batch
+        labels = labels.float()
+
+        outputs = self.forward(images)
+        preds = outputs["logits"]
+
+        batch_size, _ = preds.shape
+        preds = torch.reshape(preds, (batch_size,))
+        loss = self.criterion(preds, labels)
+        self.val_loss_accum += loss.item()
+
+        if (batch_idx + 1) % self.log_step == 0:
+            avg_loss = self.val_loss_accum / self.log_step
+            self.log("val_loss", avg_loss, prog_bar=True)
+            self.val_loss_accum = 0.0
+
         return loss
 
 

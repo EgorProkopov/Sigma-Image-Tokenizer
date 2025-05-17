@@ -276,6 +276,56 @@ class MSVDSigmoidGatingViT(nn.Module):
         return {"logits": logits, "scores": scores}
 
 
+class MSVDSigmoidGatingViTRegression(nn.Module):
+    def __init__(
+            self,
+            num_channels: int = 3,
+            pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
+            embedding_dim: int = 768,
+            selection_mode: str = "full",
+            top_k: int = 25,
+            dispersion: float = 0.900,
+            qkv_dim: int = 64,
+            mlp_hidden_size: int = 1024,
+            n_layers: int = 12,
+            n_heads: int = 12,
+    ):
+        super().__init__()
+
+        self.tokenizer = MSVDSigmoidGatingTokenizer(
+            in_channels=num_channels,
+            pixel_unshuffle_scale_factors=pixel_unshuffle_scale_factors,
+            embedding_dim=embedding_dim,
+            selection_mode=selection_mode,
+            dispersion=dispersion,
+            top_k=top_k
+        )
+
+        self.transformer_encoder = TransformerEncoder(
+            embed_dim=embedding_dim,
+            qkv_dim=qkv_dim,
+            mlp_hidden_size=mlp_hidden_size,
+            n_layers=n_layers,
+            n_heads=n_heads
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Linear(embedding_dim, 128),
+            nn.LeakyReLU(),
+            nn.Dropout(p=0.2),
+            nn.Linear(128, 1)
+        )
+
+    def forward(self, tensor):
+        msvd_output = self.tokenizer(tensor)
+        tokens = msvd_output["tokens"]
+        scores = msvd_output["scores"]
+        x = self.transformer_encoder(tokens)
+        x = x[:, 0]
+        logits = self.classifier(x)
+        return {"logits": logits, "scores": scores}
+
+
 class MFFTViT(nn.Module):
     def __init__(
             self,
