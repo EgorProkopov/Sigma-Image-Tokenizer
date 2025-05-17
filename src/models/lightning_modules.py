@@ -3,7 +3,7 @@ import lightning.pytorch as pl
 from torchmetrics import Accuracy, Precision, Recall, F1Score
 
 from src.models.losses import GatedLoss
-from src.models.transformer import VisionTransformer, MFFTViT, WaveletViT
+from src.models.transformer import VisionTransformer, MFFTViT, WaveletViT, MFFTViTRegression
 from src.models.transformer import SVDLinearViT, SVDSquareViT
 from src.models.transformer import FFTViT
 from src.models.transformer import MSVDNoScorerViT, MSVDSigmoidGatingViT
@@ -110,6 +110,52 @@ class CustomLightningModule(pl.LightningModule):
         self.val_precision.reset()
         self.val_recall.reset()
         self.val_f1.reset()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        return optimizer
+
+
+class CustomRegressionLightningModule(pl.LightningModule):
+    def __init__(self, model, criterion, lr, log_step=1000):
+        """
+        Base class for custom lightning models
+
+        Args:
+         - model:  ML model
+         - criterion: loss function
+         - lr: learning rate
+        """
+        super().__init__()
+        self.model = model
+        self.criterion = criterion
+        self.lr = lr
+        self.log_step = log_step
+
+    def forward(self, x):
+        return self.model(x)
+
+    def training_step(self, batch, batch_idx):
+        # images = batch["image"]
+        # labels = batch["label_encoded"]
+
+        images, labels = batch
+
+        outputs = self.forward(images)
+        loss = self.criterion(outputs, labels)
+
+        self.log("train_loss", loss, prog_bar=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        images, labels = batch
+
+        outputs = self.forward(images)
+        loss = self.criterion(outputs, labels)
+
+        self.log("val_loss", loss, prog_bar=False)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -381,6 +427,49 @@ class MFFTViTLightningModule(CustomLightningModule):
         self.log("val_loss", loss, prog_bar=False)
         self.log("val_filter_size", filter_size, prog_bar=True)
         return loss
+
+
+class MFFTViTRegressionLightningModule(CustomRegressionLightningModule):
+    def __init__(self, model_hparams, criterion, lr, log_step=1000):
+        model = MFFTViTRegression(
+            num_channels=model_hparams["num_channels"],
+            pixel_unshuffle_scale_factors=model_hparams["pixel_unshuffle_scale_factors"],
+            embedding_dim=model_hparams["embedding_dim"],
+            filter_size=model_hparams["filter_size"],
+            energy_ratio=model_hparams["energy_ratio"],
+            qkv_dim=model_hparams["qkv_dim"],
+            mlp_hidden_size=model_hparams["mlp_hidden_size"],
+            n_layers=model_hparams["n_layers"],
+            n_heads=model_hparams["n_heads"],
+        )
+        super().__init__(model, criterion, lr, log_step=log_step)
+        self.save_hyperparameters()
+
+    def training_step(self, batch, batch_idx):
+        # images = batch["image"]
+        # labels = batch["label_encoded"]
+
+        images, labels = batch
+        labels = labels.float()
+
+        outputs = self.forward(images)
+        logits = outputs["logits"]
+        loss = self.criterion(logits, labels)
+
+        self.log("train_loss", loss, prog_bar=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        images, labels = batch
+        labels = labels.float()
+
+        outputs = self.forward(images)
+        logits = outputs["logits"]
+        loss = self.criterion(logits, labels)
+
+
+        self.log("val_loss", loss, prog_bar=True)
 
 
 class WaveletViTLightningModule(CustomLightningModule):

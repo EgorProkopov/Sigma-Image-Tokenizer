@@ -177,3 +177,4 @@ configs/svdvit_train.yaml
 /src/scripts/generation/train/lightning_logs
 src/.DS_Store
 /src/scripts/lightning_logs
+/src/scripts/regression/lightning_logs
