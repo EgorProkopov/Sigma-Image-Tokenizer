@@ -85,7 +85,7 @@ class MSVDAutoencoderLightningModule(pl.LightningModule):
             nn.Linear(model_hparams["embedding_dim"],
                       model_hparams["embedding_dim"]),
             nn.LeakyReLU(),
-            nn.InstanceNorm1d(model_hparams["embedding_dim"]),
+            nn.Dropout(p=0.5),
         )
         self.detokenizer = MSVDSigmoidGatingDetokenizer(
             out_channels=model_hparams["out_channels"],
@@ -146,7 +146,8 @@ class MSVDAutoencoderLightningModule(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         if self._val_proj_tokens is not None:
-            output = self.generate(self._val_proj_tokens)
+            gen_inputs = torch.randn(self._val_proj_tokens.shape, device=self._val_proj_tokens.device )
+            output = self.generate(gen_inputs)
             imgs   = output["image"]
             fname  = os.path.join(
                 self.images_dir,
@@ -156,9 +157,10 @@ class MSVDAutoencoderLightningModule(pl.LightningModule):
                 imgs,
                 fname,
                 nrow=2,
-                normalize=True,
+                normalize=False,
                 value_range=(0, 1)
             )
+            print(self._val_proj_tokens)
             self._val_proj_tokens = None
 
     def configure_optimizers(self):

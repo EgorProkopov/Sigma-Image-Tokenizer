@@ -9,17 +9,6 @@ from src.tokenizers.positional_encoding import PositionalEncoding
 
 
 class FFTLowFreqFilter(nn.Module):
-    """
-    Module to compute 2D FFT of a 3-channel image batch and extract low-frequency components.
-    Supports fixed or automatic filter_size selection, iterating by LCM of downscale factors.
-
-    Input:
-        x: Tensor of shape [B, 3, W, H]
-    Output:
-        dict with:
-          - 'tensor': Tensor of shape [B, 6, filter_size, filter_size]
-          - 'filter_size': int
-    """
     def __init__(
         self,
         filter_size: int = 0,
@@ -37,12 +26,6 @@ class FFTLowFreqFilter(nn.Module):
 
 
     def compute_filter_size(self, power: torch.Tensor) -> int:
-        """
-        Compute minimal filter_size, such that
-        sum of power[..., :fs, :fs] >= energy_ratio * total_energy
-        power: [B, W, H]
-        Returns: filter_size
-        """
         B, W, H = power.shape
         cumsum_h = torch.cumsum(power, dim=1)        # [B, W, H]
         integral = torch.cumsum(cumsum_h, dim=2)     # [B, W, H]
