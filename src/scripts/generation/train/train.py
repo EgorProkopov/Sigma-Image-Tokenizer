@@ -43,7 +43,7 @@ def train_model(
         val_dataset,
         batch_size=train_hparams["train_batch_size"],
         # batch_size=24,
-        shuffle=False,
+        shuffle=True,
         num_workers=train_hparams["num_workers"]
     )
 
