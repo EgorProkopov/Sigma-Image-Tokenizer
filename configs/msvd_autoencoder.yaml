@@ -14,7 +14,7 @@ train_hparams:
     train_batch_size: 12
     val_batch_size: 12
     num_workers: 6
-    max_epoch: 20
+    max_epoch: 40
     accelerator: "cuda"
 
 logging:

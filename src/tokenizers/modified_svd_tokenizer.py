@@ -120,28 +120,6 @@ class MSVDNoScorerTokenizer(nn.Module):
 
     def forward(self, x):
         raw_tokens = self._get_raw_tokens(x)
-        # sigmas = self.mlp_scorer(raw_tokens)
-        # weighted_tokens = raw_tokens * sigmas
-
-        # # Sort in sigma-ascending order
-        # sort_idxs = torch.argsort(sigmas, dim=1)
-        # sorted_sigmas = torch.gather(
-        #     sigmas,  # (B, N, 1)
-        #     dim=1,
-        #     index=sort_idxs  # (B, N, 1)
-        # )
-        # sorted_weighted_tokens = torch.gather(
-        #     weighted_tokens,  # (B, N, 2C)
-        #     dim=1,
-        #     index=sort_idxs.expand(-1, -1, weighted_tokens.size(2))
-        # )
-
-        # sorted_sigmas = sigmas
-        # sorted_weighted_tokens = weighted_tokens
-
-        # sorted_weighted_tokens, lengths = self.__filter_tokens(sorted_weighted_tokens, sorted_sigmas)
-        # print(lengths.max().item())
-
 
         tokens = self.linear_projection(raw_tokens)
         tokens = self._add_cls_token(tokens)
