@@ -1,0 +1,176 @@
+\appendix
+\section*{Приложение B\\Код модели токенизатора на основе сингулярного разложения}
+\addcontentsline{toc}{section}{Приложение B. Код модели токенизатора на основе сингулярного разложения}
+
+\noindent Листинг B.1 — Python-код модели токенизатора на основе сингулярного разложения
+{\scriptsize
+\begin{verbatim}
+
+class MSVDNoScorerTokenizer(nn.Module):
+    def __init__(
+            self,
+            in_channels=3,
+            pixel_unshuffle_scale_factors=[2, 2, 2, 2],
+            dispersion=0.9,
+            embedding_dim=768
+    ):
+        super().__init__()
+
+        self.in_channels = in_channels
+        self.pixel_unshuffle_scale_factors = pixel_unshuffle_scale_factors
+        self.dispersion=dispersion
+
+        self.u_feature_extractor = nn.ModuleList()
+        current_channels = self.in_channels
+        for scale in self.pixel_unshuffle_scale_factors:
+            self.u_feature_extractor.append(
+                nn.Conv2d(
+                    in_channels=current_channels,
+                    out_channels=current_channels,
+                    kernel_size=3, padding=1, stride=1
+                ),
+            )
+            self.u_feature_extractor.append(nn.BatchNorm2d(current_channels))
+            self.u_feature_extractor.append(nn.LeakyReLU())
+            self.u_feature_extractor.append(nn.PixelUnshuffle(downscale_factor=scale))
+            current_channels = current_channels * (scale ** 2)
+        self.u_feature_extractor = nn.Sequential(*self.u_feature_extractor)
+
+        self.v_feature_extractor = nn.ModuleList()
+        current_channels = self.in_channels
+        for scale in self.pixel_unshuffle_scale_factors:
+            self.v_feature_extractor.append(
+                nn.Conv2d(
+                    in_channels=current_channels,
+                    out_channels=current_channels,
+                    kernel_size=3, padding=1, stride=1
+                )
+            )
+            self.v_feature_extractor.append(nn.BatchNorm2d(current_channels))
+            self.v_feature_extractor.append(nn.LeakyReLU())
+            self.v_feature_extractor.append(nn.PixelUnshuffle(downscale_factor=scale))
+            current_channels = current_channels * (scale ** 2)
+        self.v_feature_extractor = nn.Sequential(*self.v_feature_extractor)
+
+        self.linear_projection = nn.Linear(
+            in_features=current_channels * 2,
+            out_features=embedding_dim
+        )
+
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embedding_dim))
+        self.positional_encoding = PositionalEncoding(embedding_dim)
+
+
+    def _get_raw_tokens(self, x):
+        raw_u = self.u_feature_extractor(x)
+        raw_v = self.v_feature_extractor(x)
+
+        raw_u = raw_u.permute(0, 2, 3, 1).contiguous()
+        raw_v = raw_v.permute(0, 2, 3, 1).contiguous()
+
+        B, H, W, C = projected_u.shape
+        tokens_u = torch.reshape(raw_u, (B, H * W, C))
+        tokens_v = torch.reshape(raw_v, (B, H * W, C))
+
+        raw_tokens = torch.cat([tokens_u, tokens_v], dim=-1)
+        return raw_tokens
+
+    def _add_cls_token(self, tokens):
+        batch_size = tokens.shape[0]
+        cls_token = self.cls_token.expand(batch_size, -1, -1)
+        tokens = torch.cat([cls_token, tokens], dim=1)
+        return tokens
+
+    def _add_positional_encoding(self, tokens):
+        positional_encoding = self.positional_encoding(tokens)
+        tokens = tokens + positional_encoding
+        return tokens
+
+    def _filter_tokens(self, sorted_weighted_tokens, sorted_sigmas):
+        batch_size, n_tokens, raw_tokens_dim = sorted_weighted_tokens.shape
+
+        sorted_sigmas_squeezed = sorted_sigmas.squeeze(dim=-1)
+        sigma_sum = sorted_sigmas_squeezed.sum(dim=1, keepdim=True)
+        threshold = self.dispersion * sigma_sum.unsqueeze(-1)
+
+        cumsum_sigma = sorted_sigmas.cumsum(dim=1)
+        keep_mask = cumsum_sigma <= threshold
+
+        lengths = keep_mask.sum(dim=1)
+
+        max_len = lengths.max().item()
+        padded = sorted_weighted_tokens.new_zeros(batch_size, max_len, raw_tokens_dim)
+        for b in range(batch_size):
+            L = lengths[b]
+            padded[b, :L] = sorted_weighted_tokens[b, :L]
+        return padded, lengths
+
+    def forward(self, x):
+        raw_tokens = self._get_raw_tokens(x)
+
+        tokens = self.linear_projection(raw_tokens)
+        tokens = self._add_cls_token(tokens)
+        tokens = self._add_positional_encoding(tokens)
+
+        return tokens
+
+
+\end{verbatim}
+}
+
+\noindent Листинг B.2 — Python-код модели токенизатора mSVD с функцией оценки токенов
+{\scriptsize
+\begin{verbatim}
+
+class MSVDSigmoidGatingViT(nn.Module):
+    def __init__(
+            self,
+            num_channels: int = 3,
+            pixel_unshuffle_scale_factors: list = [2, 2, 2, 2],
+            embedding_dim: int = 768,
+            selection_mode: str = "full",
+            top_k: int = 25,
+            dispersion: float = 0.900,
+            qkv_dim: int = 64,
+            mlp_hidden_size: int = 1024,
+            n_layers: int = 12,
+            n_heads: int = 12,
+            n_classes: int = 1000,
+    ):
+        super().__init__()
+
+        self.tokenizer = MSVDSigmoidGatingTokenizer(
+            in_channels=num_channels,
+            pixel_unshuffle_scale_factors=pixel_unshuffle_scale_factors,
+            embedding_dim=embedding_dim,
+            selection_mode=selection_mode,
+            dispersion=dispersion,
+            top_k=top_k
+        )
+
+        self.transformer_encoder = TransformerEncoder(
+            embed_dim=embedding_dim,
+            qkv_dim=qkv_dim,
+            mlp_hidden_size=mlp_hidden_size,
+            n_layers=n_layers,
+            n_heads=n_heads
+        )
+
+        self.classifier = nn.Sequential(
+            nn.Linear(embedding_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_classes)
+        )
+
+    def forward(self, tensor):
+        msvd_output = self.tokenizer(tensor)
+        tokens = msvd_output["tokens"]
+        scores = msvd_output["scores"]
+        x = self.transformer_encoder(tokens)
+        x = x[:, 0]
+        logits = self.classifier(x)
+        return {"logits": logits, "scores": scores}
+
+
+\end{verbatim}
+}

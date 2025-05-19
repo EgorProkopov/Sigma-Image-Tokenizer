@@ -1,0 +1,106 @@
+\documentclass[a4paper,14pt]{extarticle}
+
+\usepackage{fontspec}               % вместо inputenc+fontenc
+\setmainfont{Times New Roman}       % основной шрифт
+\setmonofont{Courier New}
+
+\usepackage[english,russian]{babel}
+\usepackage{amsmath,amsfonts,amssymb,graphicx}
+\usepackage{indentfirst}
+\usepackage{geometry}
+\usepackage{subcaption}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{url}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{pdfpages}
+\usepackage{makecell}
+
+\usepackage[backend=biber, style=gost-numeric, sorting=none]{biblatex}
+\addbibresource{bachelor-thesis.bib} % Подключаем файл библиографии
+
+% Настройка полей документа
+\geometry{top=2cm, bottom=2cm, left=3cm, right=1.5cm}
+
+\renewcommand{\bibfont}{\small}
+\setlength{\bibitemsep}{0pt}
+\setlength{\biblabelsep}{1em}
+
+% Межстрочный интервал
+\onehalfspacing
+
+% Основной раздел (16 pt)
+\titleformat{\section}
+  {\normalfont\fontsize{16pt}{18pt}\bfseries}
+  {\thesection}{1em}{}
+
+% Подраздел (14 pt)
+\titleformat{\subsection}
+  {\normalfont\fontsize{14pt}{16pt}\bfseries}
+  {\thesubsection}{1em}{}
+
+% Подподраздел (14 pt обычный)
+\titleformat{\subsubsection}
+  {\normalfont\fontsize{14pt}{16pt}\normalfont}
+  {\thesubsubsection}{1em}{}
+
+
+\usepackage{etoolbox} % для \patchcmd, если ещё не подключён
+
+% для русского
+\addto\captionsrussian{%
+  \renewcommand{\figurename}{Рисунок}%
+  \renewcommand{\tablename}{Таблица}%
+}
+
+% Настройка \autoref — только для текста
+\addto\extrasrussian{%
+  \renewcommand{\figureautorefname}{рис.}%
+  \renewcommand{\tableautorefname}{табл.}%
+}
+
+\captionsetup[figure]{labelsep=endash} 
+\captionsetup[table]{labelsep=endash}
+
+
+% Разработка метода синтеза изображений для задач сегментации в анализе гранулометрических данных
+\begin{document}
+
+%\includepdf[pages=-]{pdfs/tit.pdf}
+%\includepdf[pages=-]{pdfs/Задание_ВКР_Прокопов_Е.М..pdf}
+%\includepdf[pages=-]{pdfs/Аннотация__ВКР_Прокопов_Е.М..pdf}
+
+
+\newpage
+\addcontentsline{toc}{section}{Содержание}
+\tableofcontents
+\newpage
+\input{sections/introduction}
+\newpage
+\input{sections/domain_analysis}
+\newpage
+\input{sections/solutions_analysis}
+\newpage
+\input{sections/research}
+\newpage
+\input{sections/generation}
+
+\newpage
+\input{sections/outro}
+\newpage
+
+\addcontentsline{toc}{section}{Список использованных источников}
+
+\section*{Список использованных источников}
+\printbibliography[heading=none]
+
+\newpage
+\input{sections/add1.tex}
+\newpage
+\input{sections/add2.tex}
+
+\end{document}
